@@ -11,7 +11,7 @@ export function isBase64(str) {
 	const cleaned = str.replace(/\s+/g, '');
 
 	// Allow shorter strings (minimum 4 characters for meaningful base64)
-	if (cleaned.length < 3) return false;
+	if (cleaned.length < 5) return false;
 
 	// standard + url safe
 	if (!/^[A-Za-z0-9+/_-]*={0,2}$/.test(cleaned)) {
