@@ -6,8 +6,6 @@
 		extractXmlData, 
 		remapXmlStructure, 
 		checkAndValidateValues,
-		detectMixedContent,
-		processMixedContent,
 		formatDecodedContent,
 		extractJsonData,
 		remapJsonStructure
@@ -42,35 +40,32 @@
 			// Process based on selected type
 			switch (selectedType) {
 				case 'auto':
-					// Auto-detection logic
-					if (isBase64(text)) {
-						detectedFormat = 'Base64 Encoded';
-						const decoded = decodeBase64(text);
-						const contentType = detectContentType(decoded);
-						detectedFormat += ` → ${contentType}`;
-						const formatted = formatDecodedContent(decoded, contentType);
-						decodedOutput = formatted.mainContent;
-						remappedOutput = formatted.remappedContent;
-					} else {
-						const mixedDetection = detectMixedContent(text);
-						if (mixedDetection.isMixed) {
-							detectedFormat = `Mixed Content (${mixedDetection.parts.join(', ')})`;
-							decodedOutput = processMixedContent(text, mixedDetection);
+					try {
+						if (isBase64(text)) {
+							detectedFormat = 'Base64 Encoded';
+							const decoded = decodeBase64(text);
+							const contentType = detectContentType(decoded);
+							detectedFormat += ` → ${contentType}`;
+							const formatted = formatDecodedContent(decoded, contentType);
+							decodedOutput = formatted.mainContent;
+							remappedOutput = formatted.remappedContent;
+							selectedType = contentType.toLowerCase();
 						} else {
-							const contentType = detectContentType(text);
-							if (contentType !== 'Unknown') {
-								detectedFormat = `Plain ${contentType}`;
-								const formatted = formatDecodedContent(text, contentType);
-								decodedOutput = formatted.mainContent;
-								remappedOutput = formatted.remappedContent;
-							} else {
-								detectedFormat = 'Plain Text (Base64 Encoded)';
-								decodedOutput = `Base64: ${btoa(text)}`;
-							}
+								const contentType = detectContentType(text);
+								if (contentType !== 'Unknown') {
+									detectedFormat = `${contentType}`;
+									const formatted = formatDecodedContent(text, contentType);
+									decodedOutput = formatted.mainContent;
+									remappedOutput = formatted.remappedContent;
+									selectedType = contentType.toLowerCase();
+								}
 						}
+					} catch (error) {
+						error = 'Invalid format';
+						return;
 					}
+					
 					break;
-
 				case 'base64':
 					try {
 						const decoded = decodeBase64(text);
@@ -102,7 +97,6 @@
 
 				case 'plaintext':
 					detectedFormat = 'Plain Text';
-					// Check if the plaintext is actually a base64 string
 					if (isBase64(text)) {
 						detectedFormat = 'Plain Text → Base64 Encoded';
 						try {
@@ -127,18 +121,6 @@
 						}
 					}
 					break;
-
-				case 'urlencoded':
-					try {
-						const decoded = decodeURIComponent(text);
-						detectedFormat = 'URL Decoded';
-						decodedOutput = decoded;
-					} catch (e) {
-						error = 'Invalid URL encoding';
-						return;
-					}
-					break;
-
 				default:
 					error = 'Please select a valid content type';
 					return;
@@ -216,7 +198,7 @@
 								Base64 Auto-Detect & Decoder
 							</h1>
 							<p class="text-gray-600 mt-1">
-								Automatically detect and decode base64, JSON, XML, or mixed content formats
+								Automatically detect and decode base64, JSON or XML
 							</p>
 						</div>
 					</div>
@@ -433,8 +415,6 @@
 								{ icon: 'mdi-light:numeric', title: 'Base64', desc: 'Automatic detection and decoding' },
 								{ icon: 'mdi-light:code-json', title: 'JSON', desc: 'Pretty-printed formatting' },
 								{ icon: 'mdi-light:code-tags', title: 'XML', desc: 'Tag-based formatting' },
-								{ icon: 'mdi-light:merge', title: 'Mixed Content', desc: 'Separates multiple formats' },
-								{ icon: 'mdi-light:link', title: 'URL Encoding', desc: 'Decodes URL-encoded strings' }
 							] as feature}
 							<div class="flex items-start space-x-3">
 								<Icon icon={feature.icon} class="h-5 w-5 text-green-600 mt-0.5" />
@@ -458,8 +438,6 @@
 								{ icon: 'mdi-light:format-text', title: 'Plain Text', desc: 'Regular text content' },
 								{ icon: 'mdi-light:code-json', title: 'JSON', desc: 'Structured data objects' },
 								{ icon: 'mdi-light:code-tags', title: 'XML', desc: 'Markup language content' },
-								{ icon: 'mdi-light:binary', title: 'Binary Data', desc: 'Hex or binary patterns' },
-								{ icon: 'mdi-light:key', title: 'Key-Value', desc: 'URL parameters or config' }
 							] as type}
 							<div class="flex items-start space-x-3">
 								<Icon icon={type.icon} class="h-5 w-5 text-green-600 mt-0.5" />
@@ -483,9 +461,8 @@
 						{#each [
 							{ step: 1, desc: 'Checks for valid Base64 encoding' },
 							{ step: 2, desc: 'Analyzes decoded content type' },
-							{ step: 3, desc: 'Detects mixed content patterns' },
-							{ step: 4, desc: 'Applies appropriate formatting' },
-							{ step: 5, desc: 'Handles encoding/decoding both ways' }
+							{ step: 3, desc: 'Applies appropriate formatting' },
+							{ step: 4, desc: 'Handles encoding/decoding both ways' }
 						] as item}
 						<div class="text-center">
 							<div class="rounded-full bg-green-500 text-white w-8 h-8 flex items-center justify-center mx-auto mb-2 font-bold">

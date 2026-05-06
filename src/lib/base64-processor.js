@@ -315,37 +315,27 @@ export function checkAndValidateValues(extractedData) {
 /**
  * Detect content type of text
  * @param {string} text - Text to analyze
- * @returns {string} - Content type (JSON, XML, URL Encoded, etc.)
+ * @returns {string} - Content type (JSON, XML, or Invalid Format)
  */
 export function detectContentType(text) {
 	const trimmed = text.trim();
 
+	if (trimmed.length > 10 && isBase64(trimmed)) {
+		return 'Base64';
+	}
+
 	// Check for JSON
-	if (isJson(trimmed)) {
+	if (trimmed.startsWith('{') && trimmed.endsWith('}') && isJson(trimmed)) {
 		return 'JSON';
 	}
 
 	// Check for XML
-	if (isXml(trimmed)) {
+	if (trimmed.startsWith('<?xml') && trimmed.endsWith('>') && isXml(trimmed)) {
 		return 'XML';
 	}
 
-	// Check for URL encoded
-	if (isUrlEncoded(trimmed)) {
-		return 'URL Encoded';
-	}
-
-	// Check for common data patterns
-	if (isBinaryData(trimmed)) {
-		return 'Binary Data';
-	}
-
-	// Check for common structured formats
-	if (isKey_value(trimmed)) {
-		return 'Key-Value Pairs';
-	}
-
-	return 'Plain Text';
+	// If not JSON or XML, return invalid format
+	return 'Invalid Format';
 }
 
 /**
@@ -429,72 +419,6 @@ function isKey_value(str) {
 	// Check for key=value patterns
 	const kvRegex = /^[\w-]+=[^&\n]+(&[\w-]+=[^&\n]+)*$/;
 	return kvRegex.test(str);
-}
-
-/**
- * Detect mixed content patterns in text
- * @param {string} text - Text to analyze
- * @returns {object} - Detection result with isMixed flag and parts array
- */
-export function detectMixedContent(text) {
-	const parts = [];
-	let isMixed = false;
-
-	// Look for base64 patterns in mixed content
-	const base64Blocks = text.match(/[A-Za-z0-9+/=]{20,}/g);
-	if (base64Blocks && base64Blocks.length > 0) {
-		parts.push('Base64');
-		isMixed = true;
-	}
-
-	// Look for readable text
-	const readableText = text.replace(/[A-Za-z0-9+/=]{20,}/g, '').trim();
-	if (readableText.length > 0) {
-		parts.push('Plain Text');
-		isMixed = true;
-	}
-
-	// Look for JSON/XML patterns
-	if (isJson(text) || isXml(text)) {
-		if (!parts.includes('JSON')) parts.push('JSON');
-		if (!parts.includes('XML')) parts.push('XML');
-		isMixed = true;
-	}
-
-	return { isMixed, parts };
-}
-
-/**
- * Process mixed content by extracting and decoding base64 parts
- * @param {string} text - Mixed content text
- * @param {object} detection - Detection result from detectMixedContent
- * @returns {string} - Processed content with decoded parts
- */
-export function processMixedContent(text, detection) {
-	let result = '';
-
-	// Extract and decode base64 parts
-	const base64Blocks = text.match(/[A-Za-z0-9+/=]{20,}/g);
-	if (base64Blocks) {
-		result += 'Decoded Base64 Parts:\n';
-		base64Blocks.forEach((block, index) => {
-			try {
-				const decoded = atob(block);
-				const contentType = detectContentType(decoded);
-				result += `Part ${index + 1} (${contentType}): ${formatDecodedContent(decoded, contentType)}\n\n`;
-			} catch {
-				result += `Part ${index + 1}: Failed to decode\n\n`;
-			}
-		});
-	}
-
-	// Add remaining plain text
-	const plainText = text.replace(/[A-Za-z0-9+/=]{20,}/g, '').trim();
-	if (plainText.length > 0) {
-		result += 'Plain Text Parts:\n' + plainText + '\n\n';
-	}
-
-	return result;
 }
 
 /**
@@ -737,9 +661,7 @@ export function formatDecodedContent(content, type) {
 			} catch (e) {
 				return { mainContent: `XML Processing Error: ${e.message}\n\nOriginal XML:\n${content}`, remappedContent: '' };
 			}
-		case 'Key-Value Pairs':
-			return { mainContent: content.split('&').map((pair) => pair.trim()).join('\n'), remappedContent: '' };
 		default:
-			return { mainContent: content, remappedContent: '' };
+			return { mainContent: 'Invalid Format - Only JSON and XML are supported', remappedContent: '' };
 	}
 }
