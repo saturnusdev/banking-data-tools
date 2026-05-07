@@ -1,8 +1,36 @@
 <script>
 	import Icon from '@iconify/svelte';
-	import { minify } from 'terser';
-	import prettier from 'prettier/standalone';
-	import parserBabel from 'prettier/plugins/babel';
+	import { loadTerser, loadPrettier } from '$lib/lazy-loads';
+
+	// Lazy loaded dependencies
+	let minify = null;
+	let prettier = null;
+	let parserBabel = null;
+	let dependenciesLoaded = false;
+
+	// Lazy load dependencies when needed
+	async function loadDependencies() {
+		if (dependenciesLoaded) return;
+		
+		try {
+			const terser = await loadTerser();
+			minify = terser.minify;
+			
+			const prettierLib = await loadPrettier();
+			prettier = prettierLib.prettier;
+			parserBabel = prettierLib.parserBabel;
+			
+			dependenciesLoaded = true;
+		} catch (error) {
+			console.error('Failed to load dependencies:', error);
+			error = 'Failed to load required libraries';
+		}
+	}
+
+	// Initialize dependencies on first interaction
+	async function initializeIfNeeded() {
+		await loadDependencies();
+	}
 
 	let jsCode = '';
 	let mode = 'original';
@@ -15,6 +43,7 @@
 	async function minifyJs() {
 		try {
 			error = '';
+			await initializeIfNeeded();
 
 			if (!jsCode.trim()) {
 				error = 'Please enter JavaScript code';
@@ -81,13 +110,14 @@
 	async function unminifyJs() {
 		try {
 			error = '';
+			await initializeIfNeeded();
 
 			if (!jsCode.trim()) {
 				error = 'Please enter JavaScript code';
 				return;
 			}
 
-			jsCode = await prettier.format(jsCode, {
+			const formatted = await prettier.format(jsCode, {
 				parser: "babel",
 				plugins: [parserBabel],
 				semi: true,

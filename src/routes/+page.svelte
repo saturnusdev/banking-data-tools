@@ -1,7 +1,14 @@
 <script>
 	import { goto } from '$app/navigation';
 	import Card from '$lib/components/Card.svelte';
-	import Icon from '@iconify/svelte';
+	import SafeIcon from '$lib/SafeIcon.svelte';
+	import { performanceMonitor } from '$lib/performance';
+	import { onMount } from 'svelte';
+
+	// Monitor page load performance
+	onMount(() => {
+		performanceMonitor.observePageLoad();
+	});
 
 	// Sample JSON data array
 	const products = [
@@ -99,7 +106,7 @@
 			<div class="text-center">
 				<div class="flex justify-center mb-6">
 					<div class="rounded-full bg-gradient-to-r from-purple-500 to-pink-500 p-4">
-						<Icon icon="mdi-light:bank-circle" class="h-12 w-12 text-white" />
+						<SafeIcon icon="mdi-light:bank-circle" class="h-12 w-12 text-white" />
 					</div>
 				</div>
 				<h1 class="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
@@ -127,7 +134,7 @@
 					<div class="bg-gradient-to-r {product.color} p-6 relative overflow-hidden">
 						<div class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
 						<div class="relative z-10">
-							<Icon icon={product.icon} class="h-10 w-10 text-white mb-3" />
+							<SafeIcon iconName={product.icon} customClass="h-10 w-10 text-white mb-3" />
 							<h3 class="text-xl font-bold text-white">{product.title}</h3>
 						</div>
 					</div>
@@ -139,7 +146,7 @@
 						</p>
 						<div class="flex items-center text-purple-600 font-medium text-sm group-hover:text-purple-700 transition-colors">
 							<span>Launch Tool</span>
-							<Icon icon="mdi-light:arrow-right" class="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+							<SafeIcon iconName="mdi-light:arrow-right" customClass="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
 						</div>
 					</div>
 				</div>

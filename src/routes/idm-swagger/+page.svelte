@@ -1,13 +1,16 @@
 <script>
 	import Icon from '@iconify/svelte';
 	import 'swagger-ui-dist/swagger-ui.css';
-	import * as XLSX from 'xlsx';
-	import yaml from 'js-yaml';
-	import SwaggerUI from 'swagger-ui-dist/swagger-ui-bundle';
+	import { loadSwaggerUI, loadXLSX, loadYAML } from '$lib/lazy-loads';
 	import { buildSwagger } from '$lib/plugin/swagger/builder';
 	import { cleanupSwagger } from '$lib/plugin/swagger/cleanupSwagger';
 	import { applyExcelToSwagger } from '$lib/plugin/swagger/applyExcelToSwagger';
 	import { updateSwaggerFromForm } from '$lib/plugin/swagger/updateSwaggerFromForm';
+
+	// Lazy loaded dependencies
+	let XLSX = null;
+	let yaml = null;
+	let SwaggerUI = null;
 
 	let error = '';
 	let yamlText = '';
@@ -36,6 +39,27 @@
 	let selectedMethod = 'post';
 
 	let conflicts = [];
+	let dependenciesLoaded = false;
+
+	// Lazy load dependencies when needed
+	async function loadDependencies() {
+		if (dependenciesLoaded) return;
+		
+		try {
+			XLSX = await loadXLSX();
+			yaml = await loadYAML();
+			SwaggerUI = await loadSwaggerUI();
+			dependenciesLoaded = true;
+		} catch (error) {
+			console.error('Failed to load dependencies:', error);
+			error = 'Failed to load required libraries';
+		}
+	}
+
+	// Initialize dependencies on first interaction
+	async function initializeIfNeeded() {
+		await loadDependencies();
+	}
 
 	function toCamelCase(str) {
 		return str
@@ -50,7 +74,9 @@
 			.join('');
 	}
 
-	function renderSwagger(swagger) {
+	async function renderSwagger(swagger) {
+		await initializeIfNeeded(); // Ensure dependencies are loaded
+		
 		if (!swaggerContainer) return;
 		swaggerContainer.innerHTML = '';
 		SwaggerUI({
@@ -59,7 +85,9 @@
 		});
 	}
 
-	function processSwaggerTemplate(file) {
+	async function processSwaggerTemplate(file) {
+		await initializeIfNeeded(); // Ensure dependencies are loaded
+		
 		const reader = new FileReader();
 		reader.onload = (e) => {
 			try {
@@ -75,7 +103,9 @@
 		reader.readAsText(file);
 	}
 
-	function processExcel() {
+	async function processExcel() {
+		await initializeIfNeeded(); // Ensure dependencies are loaded
+		
 		if (!sheetName.trim()) {
 			error = 'Sheet name is required';
 			return;

@@ -1,5 +1,8 @@
 <script>
 	import Icon from '@iconify/svelte';
+	
+	// Fix for node.remove error - ensure icons are properly initialized
+	let iconError = false;
 
 	let jsonData = '';
 	let mode = 'parse'; // 'parse' or 'stringified'
@@ -40,7 +43,12 @@
 	}
 
 	function copyToClipboard() {
-		navigator.clipboard.writeText(jsonData);
+		try {
+			navigator.clipboard.writeText(jsonData);
+		} catch (err) {
+			console.error('Clipboard error:', err);
+			error = 'Failed to copy to clipboard';
+		}
 	}
 
 	function clearAll() {
@@ -89,7 +97,13 @@
 			<div class="bg-gradient-to-r from-purple-500 to-indigo-500 p-6">
 				<div class="flex items-center justify-between">
 					<div class="flex items-center space-x-3">
-						<Icon icon="mdi-light:toggle-switch" class="h-6 w-6 text-white" />
+						{#if !iconError}
+							<Icon icon="mdi-light:toggle-switch" class="h-6 w-6 text-white" />
+						{:else}
+							<div class="h-6 w-6 bg-white/20 rounded-full flex items-center justify-center">
+								<span class="text-white text-xs">⚙️</span>
+							</div>
+						{/if}
 						<h2 class="text-xl font-bold text-white">JSON Mode</h2>
 					</div>
 					{#if mode === 'stringified'}
@@ -139,7 +153,13 @@
 			<div class="bg-gradient-to-r from-gray-700 to-gray-900 p-6">
 				<div class="flex items-center justify-between">
 					<div class="flex items-center space-x-3">
-						<Icon icon="mdi-light:code-braces" class="h-6 w-6 text-white" />
+						{#if !iconError}
+							<Icon icon="mdi-light:code-braces" class="h-6 w-6 text-white" />
+						{:else}
+							<div class="h-6 w-6 bg-white/20 rounded-full flex items-center justify-center">
+								<span class="text-white text-xs">⚙️</span>
+							</div>
+						{/if}
 						<h2 class="text-xl font-bold text-white">
 							JSON Data ({mode === 'parse' ? 'Parse Mode' : 'Stringified Mode'})
 						</h2>
@@ -151,7 +171,11 @@
 								class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 							>
 								<span class="relative z-10 flex items-center space-x-2">
-									<Icon icon="mdi-light:code-json" class="h-4 w-4" />
+									{#if !iconError}
+										<Icon icon="mdi-light:code-json" class="h-4 w-4" />
+									{:else}
+										<span>📄</span>
+									{/if}
 									<span>Parse</span>
 								</span>
 							</button>
@@ -161,7 +185,11 @@
 								class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 							>
 								<span class="relative z-10 flex items-center space-x-2">
-									<Icon icon="mdi-light:format-text" class="h-4 w-4" />
+									{#if !iconError}
+										<Icon icon="mdi-light:format-text" class="h-4 w-4" />
+									{:else}
+										<span>📝</span>
+									{/if}
 									<span>Stringified</span>
 								</span>
 							</button>
@@ -171,7 +199,11 @@
 							class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 						>
 							<span class="relative z-10 flex items-center space-x-2">
-								<Icon icon="mdi-light:content-copy" class="h-4 w-4" />
+								{#if !iconError}
+									<Icon icon="mdi-light:content-copy" class="h-4 w-4" />
+								{:else}
+									<span>📋</span>
+								{/if}
 								<span>Copy</span>
 							</span>
 						</button>
@@ -180,7 +212,11 @@
 							class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 						>
 							<span class="relative z-10 flex items-center space-x-2">
-								<Icon icon="mdi-light:delete" class="h-4 w-4" />
+								{#if !iconError}
+									<Icon icon="mdi-light:delete" class="h-4 w-4" />
+								{:else}
+									<span>🗑️</span>
+								{/if}
 								<span>Clear</span>
 							</span>
 						</button>
@@ -201,14 +237,24 @@
 			<section class="bg-gradient-to-r from-red-50 to-rose-50 rounded-2xl shadow-xl border border-red-100 overflow-hidden">
 				<div class="bg-gradient-to-r from-red-500 to-rose-500 p-4">
 					<div class="flex items-center space-x-3">
-						<Icon icon="mdi-light:alert" class="h-5 w-5 text-white" />
+						{#if !iconError}
+							<Icon icon="mdi-light:alert" class="h-5 w-5 text-white" />
+						{:else}
+							<div class="h-5 w-5 bg-white/20 rounded-full flex items-center justify-center">
+								<span class="text-white text-xs">⚠️</span>
+							</div>
+						{/if}
 						<h3 class="text-lg font-bold text-white">Error</h3>
 					</div>
 				</div>
 				<div class="p-6">
 					<div class="flex items-center space-x-3">
 						<div class="rounded-full bg-red-100 p-2">
-							<Icon icon="mdi-light:alert-circle" class="h-6 w-6 text-red-600" />
+							{#if !iconError}
+								<Icon icon="mdi-light:alert-circle" class="h-6 w-6 text-red-600" />
+							{:else}
+								<span class="h-6 w-6 bg-red-100 rounded-full flex items-center justify-center text-red-600 text-xs">⚠️</span>
+							{/if}
 						</div>
 						<p class="text-red-800 font-medium">{error}</p>
 					</div>
