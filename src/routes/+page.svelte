@@ -91,6 +91,14 @@
 			icon: 'mdi-light:lock-open',
 			color: 'from-purple-500 to-pink-500',
             link: '/base64-decoder'
+		},
+		{
+			id: 11,
+			title: 'YAML to JSON',
+			description: 'Convert YAML/OpenAPI specifications to JSON format',
+			icon: 'mdi:file-code',
+			color: 'from-green-500 to-emerald-500',
+            link: '/yaml-to-json'
 		}
 	];
 
