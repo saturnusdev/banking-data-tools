@@ -1,3 +1,26 @@
-# allow crawling everything by default
 User-agent: *
-Disallow:
+Allow: /
+
+# Sitemap
+Sitemap: https://www.banking-tools.java-sc.com/sitemap.xml
+
+# Block common non-content paths
+Disallow: /api/
+Disallow: /_app/
+Disallow: /.well-known/
+
+# Allow search engines to crawl all tools
+Allow: /json-tools
+Allow: /json-stringify
+Allow: /iso8583-parser
+Allow: /dfdl-parser
+Allow: /base64-decoder
+Allow: /yaml-to-json
+Allow: /js-minify
+Allow: /hex-ebcdic-converter
+Allow: /fixed-length-parsed
+Allow: /idm-swagger
+Allow: /iso8583-1987-itm
+
+# Crawl delay for respectful crawling
+Crawl-delay: 1

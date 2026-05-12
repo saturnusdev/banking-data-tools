@@ -14,7 +14,11 @@ export async function createJsonEditor(
                     postMessage: function() {},
                     terminate: function() {},
                     addEventListener: function() {},
-                    removeEventListener: function() {}
+                    removeEventListener: function() {},
+                    dispatchEvent: function() { return false; },
+                    onerror: null,
+                    onmessage: null,
+                    onmessageerror: null
                 } as Worker;
             }
         };
@@ -31,14 +35,16 @@ export async function createJsonEditor(
     const editor = monaco.editor.create(el, {
         value,
         language: 'json',
-        theme: 'vs-light',
+        theme: 'vs',
         automaticLayout: true,
         wordWrap: 'on',
         formatOnPaste: true,
         formatOnType: true,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
-        renderLineHighlight: 'gutter'
+        renderLineHighlight: 'gutter',
+        fontSize: 14,
+        fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace'
     });
 
     return editor;
