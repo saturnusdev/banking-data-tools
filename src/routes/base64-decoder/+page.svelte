@@ -2,13 +2,15 @@
 	import Icon from '@iconify/svelte';
 	import { 
 		isBase64, 
+		decodeBase64,
 		detectContentType, 
 		extractXmlData, 
 		remapXmlStructure, 
 		checkAndValidateValues,
 		formatDecodedContent,
 		extractJsonData,
-		remapJsonStructure
+		remapJsonStructure,
+		isHexValue
 	} from '$lib/base64-processor.js';
 
 	let inputText = '';
@@ -20,6 +22,8 @@
 
 	let detectedFormat = '';
 	let isProcessing = false;
+	let isHexDetected = false;
+	let extractedHexValue = '';
 
 	function detectAndDecode() {
 		try {
@@ -28,6 +32,8 @@
 			decodedOutput = '';
 			remappedOutput = '';
 			detectedFormat = '';
+			isHexDetected = false;
+			extractedHexValue = '';
 
 			if (!inputText.trim()) {
 				error = 'Please enter text to process';
@@ -50,6 +56,14 @@
 							decodedOutput = formatted.mainContent;
 							remappedOutput = formatted.remappedContent;
 							selectedType = contentType.toLowerCase();
+							
+							// Check if decoded output is hex
+							const hexCheck = isHexValue(decoded);
+							if (hexCheck.isHex) {
+								isHexDetected = true;
+								extractedHexValue = hexCheck.hexValue;
+								detectedFormat += ' → Hex Detected';
+							}
 						} else {
 								const contentType = detectContentType(text);
 								if (contentType !== 'Unknown') {
@@ -75,6 +89,14 @@
 						const formatted = formatDecodedContent(decoded, contentType);
 						decodedOutput = formatted.mainContent;
 						remappedOutput = formatted.remappedContent;
+						
+						// Check if decoded output is hex
+						const hexCheck = isHexValue(decoded);
+						if (hexCheck.isHex) {
+							isHexDetected = true;
+							extractedHexValue = hexCheck.hexValue;
+							detectedFormat += ' → Hex Detected';
+						}
 					} catch (e) {
 						error = 'Invalid base64 format';
 						return;
@@ -106,6 +128,14 @@
 							const formatted = formatDecodedContent(decoded, contentType);
 							decodedOutput = formatted.mainContent;
 							remappedOutput = formatted.remappedContent;
+							
+							// Check if decoded output is hex
+							const hexCheck = isHexValue(decoded);
+							if (hexCheck.isHex) {
+								isHexDetected = true;
+								extractedHexValue = hexCheck.hexValue;
+								detectedFormat += ' → Hex Detected';
+							}
 						} catch {
 							decodedOutput = `Original: ${text}\n\nFailed to decode base64`;
 						}
@@ -118,6 +148,14 @@
 							remappedOutput = formatted.remappedContent;
 						} else {
 							decodedOutput = text;
+							
+							// Check if plain text is hex
+							const hexCheck = isHexValue(text);
+							if (hexCheck.isHex) {
+								isHexDetected = true;
+								extractedHexValue = hexCheck.hexValue;
+								detectedFormat += ' → Hex Detected';
+							}
 						}
 					}
 					break;
@@ -338,9 +376,22 @@
 					</div>
 				</div>
 				<div class="p-6">
-					<div class="rounded-xl bg-gray-900 p-6 font-mono text-sm text-green-400 overflow-x-auto">
-						<pre class="whitespace-pre-wrap">{decodedOutput}</pre>
+					<div class="rounded-xl bg-gray-900 p-6 font-mono text-sm text-green-400 overflow-auto max-h-96">
+						<pre class="whitespace-pre-wrap break-words">{decodedOutput}</pre>
 					</div>
+					{#if isHexDetected}
+						<div class="mt-4 flex justify-end">
+							<a
+								href="/hex-ebcdic-converter?hex={extractedHexValue}"
+								class="group relative overflow-hidden rounded-lg bg-gradient-to-r from-pink-500 to-rose-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:from-pink-600 hover:to-rose-600 shadow-lg hover:shadow-xl"
+							>
+								<span class="relative z-10 flex items-center space-x-2">
+									<Icon icon="mdi-light:swap-horizontal" class="h-4 w-4" />
+									<span>Convert to EBCDIC</span>
+								</span>
+							</a>
+						</div>
+					{/if}
 				</div>
 			</section>
 		{/if}
@@ -366,8 +417,8 @@
 					</div>
 				</div>
 				<div class="p-6">
-					<div class="rounded-xl bg-gray-900 p-6 font-mono text-sm text-purple-400 overflow-x-auto">
-						<pre class="whitespace-pre-wrap">{remappedOutput}</pre>
+					<div class="rounded-xl bg-gray-900 p-6 font-mono text-sm text-purple-400 overflow-auto max-h-96">
+						<pre class="whitespace-pre-wrap break-words">{remappedOutput}</pre>
 					</div>
 				</div>
 			</section>

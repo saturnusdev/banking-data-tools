@@ -5,6 +5,8 @@
 	let fields = [];
 	let parsedData = [];
 	let error = '';
+	let xsdInput = '';
+	let showXsdInput = false;
 
 	// Reactive: auto-parse when fields or fixedText changes (after initial parse)
 	// But only if we have data and fields
@@ -125,6 +127,48 @@
 		const validLines = lines.filter((line) => line.length >= totalLength);
 		parsedData = parseLines(validLines, newFields, totalLength);
 		autoParseEnabled = true;
+	}
+
+	// Extract fields from XSD standard
+	function extractFromXsd() {
+		error = '';
+		if (!xsdInput.trim()) {
+			error = 'Please paste XSD content first.';
+			return;
+		}
+
+		// Parse XSD elements to extract name and dfdl:length (order-independent)
+		const elementRegex = /<xsd:element[^>]*name=["']([^"']+)["'][^>]*dfdl:length=["'](\d+)["'][^>]*\/>|<xsd:element[^>]*dfdl:length=["'](\d+)["'][^>]*name=["']([^"']+)["'][^>]*\/>/g;
+		const newFields = [];
+		let match;
+
+		while ((match = elementRegex.exec(xsdInput)) !== null) {
+			// Handle both orderings: name first or dfdl:length first
+			const name = match[1] || match[4];
+			const length = parseInt(match[2] || match[3], 10);
+			if (name && !isNaN(length)) {
+				newFields.push({ name, length });
+			}
+		}
+
+		if (newFields.length === 0) {
+			error = 'No valid XSD elements found with name and dfdl:length attributes.';
+			return;
+		}
+
+		fields = newFields;
+		showXsdInput = false;
+		xsdInput = '';
+
+		// Auto-parse if data exists
+		if (fixedText.trim()) {
+			const totalLength = fields.reduce((sum, f) => sum + f.length, 0);
+			const lines = fixedText.split('\n').filter((line) => line.length >= totalLength);
+			if (lines.length > 0) {
+				parsedData = parseLines(lines, fields, totalLength);
+				autoParseEnabled = true;
+			}
+		}
 	}
 
 	// Reactive auto-parse (used when fields change after initial parse)
@@ -259,6 +303,15 @@
 							</span>
 						</button>
 						<button
+							on:click={() => showXsdInput = !showXsdInput}
+							class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
+						>
+							<span class="relative z-10 flex items-center space-x-2">
+								<Icon icon="mdi-light:file-code" class="h-4 w-4" />
+								<span>Extract from Standard</span>
+							</span>
+						</button>
+						<button
 							on:click={addField}
 							class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 						>
@@ -271,6 +324,33 @@
 				</div>
 			</div>
 			<div class="p-6 space-y-4">
+				{#if showXsdInput}
+					<div class="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-4 border border-purple-200 space-y-3">
+						<div class="flex items-center justify-between">
+							<div class="flex items-center space-x-2">
+								<Icon icon="mdi-light:file-code" class="h-5 w-5 text-purple-600" />
+								<p class="text-sm font-medium text-purple-800">Paste XSD Standard</p>
+							</div>
+							<button
+								on:click={() => showXsdInput = false}
+								class="text-purple-600 hover:text-purple-800 transition-colors"
+							>
+								<Icon icon="mdi-light:close" class="h-5 w-5" />
+							</button>
+						</div>
+						<textarea
+							bind:value={xsdInput}
+							placeholder="Paste XSD content with xsd:element tags containing name and dfdl:length attributes..."
+							class="w-full h-32 rounded-lg border-2 border-purple-200 p-3 font-mono text-xs transition-all focus:border-purple-400 focus:ring-2 focus:ring-purple-100 resize-none"
+						></textarea>
+						<button
+							on:click={extractFromXsd}
+							class="w-full rounded-lg bg-gradient-to-r from-purple-500 to-indigo-500 px-4 py-2 text-sm font-semibold text-white transition-all hover:from-purple-600 hover:to-indigo-600"
+						>
+							Extract Fields
+						</button>
+					</div>
+				{/if}
 				<div class="space-y-3">
 					{#each fields as field, i (i)}
 						<div class="flex gap-3">

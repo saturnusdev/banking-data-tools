@@ -1,6 +1,17 @@
 // Base64 and XML processing utilities
 
 /**
+ * Decode base64 string (handles both standard and URL-safe encoding)
+ * @param {string} str - Base64 string to decode
+ * @returns {string} - Decoded string
+ */
+export function decodeBase64(str) {
+	const cleaned = str.replace(/\s+/g, '');
+	const padded = cleaned + '='.repeat((4 - (cleaned.length % 4)) % 4);
+	return atob(padded.replace(/-/g, '+').replace(/_/g, '/'));
+}
+
+/**
  * Check if a string is valid base64 with enhanced validation
  * @param {string} str - String to check
  * @returns {boolean} - True if valid base64 with meaningful content
@@ -315,7 +326,7 @@ export function checkAndValidateValues(extractedData) {
 /**
  * Detect content type of text
  * @param {string} text - Text to analyze
- * @returns {string} - Content type (JSON, XML, or Invalid Format)
+ * @returns {string} - Content type (JSON, XML, Plain Text, or Invalid Format)
  */
 export function detectContentType(text) {
 	const trimmed = text.trim();
@@ -330,12 +341,12 @@ export function detectContentType(text) {
 	}
 
 	// Check for XML
-	if (trimmed.startsWith('<?xml') && trimmed.endsWith('>') && isXml(trimmed)) {
+	if ((trimmed.startsWith('<?xml') || trimmed.startsWith('<')) && isXml(trimmed)) {
 		return 'XML';
 	}
 
-	// If not JSON or XML, return invalid format
-	return 'Invalid Format';
+	// If not JSON or XML, treat as plain text
+	return 'Plain Text';
 }
 
 /**
@@ -419,6 +430,29 @@ function isKey_value(str) {
 	// Check for key=value patterns
 	const kvRegex = /^[\w-]+=[^&\n]+(&[\w-]+=[^&\n]+)*$/;
 	return kvRegex.test(str);
+}
+
+/**
+ * Check if string is hex value (either X'...' format or raw hex)
+ * @param {string} str - String to check
+ * @returns {object} - Object with isHex boolean and extracted hex string
+ */
+export function isHexValue(str) {
+	const trimmed = str.trim();
+	
+	// Check for X'...' format
+	const xFormatMatch = trimmed.match(/^X'([0-9A-Fa-f]+)'$/);
+	if (xFormatMatch) {
+		return { isHex: true, hexValue: xFormatMatch[1] };
+	}
+	
+	// Check for raw hex (only hex characters, even length, reasonable length)
+	const hexRegex = /^[0-9A-Fa-f]+$/;
+	if (hexRegex.test(trimmed) && trimmed.length >= 2 && trimmed.length % 2 === 0) {
+		return { isHex: true, hexValue: trimmed };
+	}
+	
+	return { isHex: false, hexValue: '' };
 }
 
 /**
@@ -661,7 +695,9 @@ export function formatDecodedContent(content, type) {
 			} catch (e) {
 				return { mainContent: `XML Processing Error: ${e.message}\n\nOriginal XML:\n${content}`, remappedContent: '' };
 			}
+		case 'Plain Text':
+			return { mainContent: content, remappedContent: '' };
 		default:
-			return { mainContent: 'Invalid Format - Only JSON and XML are supported', remappedContent: '' };
+			return { mainContent: 'Invalid Format', remappedContent: '' };
 	}
 }

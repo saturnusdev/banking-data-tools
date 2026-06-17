@@ -1,147 +1,215 @@
 <script>
 	import Icon from '@iconify/svelte';
+	import { page } from '$app/stores';
 
 	let inputData = '';
 	let outputData = '';
 	let conversionMode = 'hexToEbcdic'; // 'hexToEbcdic' or 'ebcdicToHex'
 	let error = '';
 
-	// EBCDIC to ASCII conversion table
-	const ebcdicToAscii = {
-		0x00: '\x00', 0x01: '\x01', 0x02: '\x02', 0x03: '\x03',
-		0x04: '\x04', 0x05: '\x05', 0x06: '\x06', 0x07: '\x07',
-		0x08: '\x08', 0x09: '\x09', 0x0A: '\x0A', 0x0B: '\x0B',
-		0x0C: '\x0C', 0x0D: '\x0D', 0x0E: '\x0E', 0x0F: '\x0F',
-		0x10: '\x10', 0x11: '\x11', 0x12: '\x12', 0x13: '\x13',
-		0x14: '\x14', 0x15: '\x15', 0x16: '\x16', 0x17: '\x17',
-		0x18: '\x18', 0x19: '\x19', 0x1A: '\x1A', 0x1B: '\x1B',
-		0x1C: '\x1C', 0x1D: '\x1D', 0x1E: '\x1E', 0x1F: '\x1F',
-		0x20: ' ',    0x21: ' ',    0x22: ' ',    0x23: ' ',
-		0x24: ' ',    0x25: ' ',    0x26: ' ',    0x27: ' ',
-		0x28: ' ',    0x29: ' ',    0x2A: ' ',    0x2B: ' ',
-		0x2C: ' ',    0x2D: ' ',    0x2E: ' ',    0x2F: ' ',
-		0x30: '0',    0x31: '1',    0x32: '2',    0x33: '3',
-		0x34: '4',    0x35: '5',    0x36: '6',    0x37: '7',
-		0x38: '8',    0x39: '9',    0x3A: ' ',    0x3B: ' ',
-		0x3C: ' ',    0x3D: ' ',    0x3E: ' ',    0x3F: ' ',
-		0x40: ' ',    0x41: ' ',    0x42: ' ',    0x43: ' ',
-		0x44: ' ',    0x45: ' ',    0x46: ' ',    0x47: ' ',
-		0x48: ' ',    0x49: ' ',    0x4A: ' ',    0x4B: ' ',
-		0x4C: ' ',    0x4D: ' ',    0x4E: ' ',    0x4F: ' ',
-		0x50: ' ',    0x51: ' ',    0x52: ' ',    0x53: ' ',
-		0x54: ' ',    0x55: ' ',    0x56: ' ',    0x57: ' ',
-		0x58: ' ',    0x59: ' ',    0x5A: ' ',    0x5B: ' ',
-		0x5C: ' ',    0x5D: ' ',    0x5E: ' ',    0x5F: ' ',
-		0x60: ' ',    0x61: ' ',    0x62: ' ',    0x63: ' ',
-		0x64: ' ',    0x65: ' ',    0x66: ' ',    0x67: ' ',
-		0x68: ' ',    0x69: ' ',    0x6A: ' ',    0x6B: ' ',
-		0x6C: ' ',    0x6D: ' ',    0x6E: ' ',    0x6F: ' ',
-		0x70: ' ',    0x71: ' ',    0x72: ' ',    0x73: ' ',
-		0x74: ' ',    0x75: ' ',    0x76: ' ',    0x77: ' ',
-		0x78: ' ',    0x79: ' ',    0x7A: ' ',    0x7B: ' ',
-		0x7C: ' ',    0x7D: ' ',    0x7E: ' ',    0x7F: ' ',
-		0x80: ' ',    0x81: ' ',    0x82: ' ',    0x83: ' ',
-		0x84: ' ',    0x85: ' ',    0x86: ' ',    0x87: ' ',
-		0x88: ' ',    0x89: ' ',    0x8A: ' ',    0x8B: ' ',
-		0x8C: ' ',    0x8D: ' ',    0x8E: ' ',    0x8F: ' ',
-		0x90: ' ',    0x91: ' ',    0x92: ' ',    0x93: ' ',
-		0x94: ' ',    0x95: ' ',    0x96: ' ',    0x97: ' ',
-		0x98: ' ',    0x99: ' ',    0x9A: ' ',    0x9B: ' ',
-		0x9C: ' ',    0x9D: ' ',    0x9E: ' ',    0x9F: ' ',
-		0xA0: ' ',    0xA1: '~',    0xA2: ' ',    0xA3: ' ',
-		0xA4: ' ',    0xA5: ' ',    0xA6: ' ',    0xA7: ' ',
-		0xA8: ' ',    0xA9: ' ',    0xAA: ' ',    0xAB: ' ',
-		0xAC: '.',    0xAD: '<',    0xAE: '(',    0xAF: '+',
-		0xB0: '|',    0xB1: '&',    0xB2: ' ',    0xB3: ' ',
-		0xB4: ' ',    0xB5: ' ',    0xB6: ' ',    0xB7: ' ',
-		0xB8: ' ',    0xB9: '!',    0xBA: '$',    0xBB: '*',
-		0xBC: ')',    0xBD: ';',    0xBE: '^',    0xBF: '-',
-		0xC0: '/',    0xC1: ' ',    0xC2: ' ',    0xC3: ' ',
-		0xC4: ' ',    0xC5: ' ',    0xC6: ' ',    0xC7: ' ',
-		0xC8: ' ',    0xC9: ' ',    0xCA: ' ',    0xCB: ' ',
-		0xCC: ' ',    0xCD: ' ',    0xCE: ' ',    0xCF: ' ',
-		0xD0: ' ',    0xD1: ' ',    0xD2: ' ',    0xD3: ' ',
-		0xD4: ' ',    0xD5: ' ',    0xD6: ' ',    0xD7: ' ',
-		0xD8: ' ',    0xD9: ' ',    0xDA: ' ',    0xDB: ' ',
-		0xDC: ' ',    0xDD: ' ',    0xDE: ' ',    0xDF: ' ',
-		0xE0: ' ',    0xE1: ' ',    0xE2: ' ',    0xE3: ' ',
-		0xE4: ' ',    0xE5: ' ',    0xE6: ' ',    0xE7: ' ',
-		0xE8: ' ',    0xE9: ' ',    0xEA: ' ',    0xEB: ' ',
-		0xEC: ' ',    0xED: ' ',    0xEE: ' ',    0xEF: ' ',
-		0xF0: '0',    0xF1: '1',    0xF2: '2',    0xF3: '3',
-		0xF4: '4',    0xF5: '5',    0xF6: '6',    0xF7: '7',
-		0xF8: '8',    0xF9: '9',    0xFA: ' ',    0xFB: ' ',
-		0xFC: ' ',    0xFD: ' ',    0xFE: ' ',    0xFF: ' '
-	};
-
-	// ASCII to EBCDIC conversion table (reverse of above)
-	const asciiToEbcdic = {};
-	for (let ebcdicCode in ebcdicToAscii) {
-		const asciiChar = ebcdicToAscii[ebcdicCode];
-		if (asciiChar && !asciiToEbcdic[asciiChar]) {
-			asciiToEbcdic[asciiChar] = parseInt(ebcdicCode);
+	// Check for hex parameter in URL
+	$: if ($page.url.searchParams.has('hex')) {
+		const hexParam = $page.url.searchParams.get('hex');
+		if (hexParam) {
+			inputData = hexParam;
+			conversionMode = 'hexToEbcdic';
+			// Auto-convert
+			convert();
 		}
 	}
+
+	// Converted from your original switch statement
+	const ebcdicMap = {
+		'00': '<NUL>',
+		'01': '<SOH>',
+		'02': '<STX>',
+		'03': '<ETX>',
+		'04': '<SEL>',
+		'05': '<HT>',
+		'06': '<RNL>',
+		'07': '<DEL>',
+		'08': '<GE>',
+		'09': '<SPS>',
+		'0A': '<RPT>',
+		'0B': '<VT>',
+		'0C': '<FF>',
+		'0D': String.fromCharCode(13),
+		'0E': '<SO>',
+		'0F': '<SI>',
+
+		'40': ' ',
+
+		'4A': '[',
+		'4B': '.',
+		'4C': '<',
+		'4D': '(',
+		'4E': '+',
+		'4F': '!',
+
+		'50': '&',
+
+		'5A': ']',
+		'5B': '$',
+		'5C': '*',
+		'5D': ')',
+		'5E': ';',
+		'5F': '^',
+
+		'60': '_',
+		'61': '/',
+
+		'6A': '|',
+		'6B': ',',
+		'6C': '%',
+		'6D': '_',
+		'6E': '>',
+		'6F': '?',
+
+		'79': '`',
+		'7A': ':',
+		'7B': '#',
+		'7C': '@',
+		'7D': "'",
+		'7E': '=',
+		'7F': '"',
+
+		// lowercase
+		'81': 'a',
+		'82': 'b',
+		'83': 'c',
+		'84': 'd',
+		'85': 'e',
+		'86': 'f',
+		'87': 'g',
+		'88': 'h',
+		'89': 'i',
+
+		'91': 'j',
+		'92': 'k',
+		'93': 'l',
+		'94': 'm',
+		'95': 'n',
+		'96': 'o',
+		'97': 'p',
+		'98': 'q',
+		'99': 'r',
+
+		'A1': '~',
+		'A2': 's',
+		'A3': 't',
+		'A4': 'u',
+		'A5': 'v',
+		'A6': 'w',
+		'A7': 'x',
+		'A8': 'y',
+		'A9': 'z',
+
+		// uppercase
+		'C0': '{',
+		'C1': 'A',
+		'C2': 'B',
+		'C3': 'C',
+		'C4': 'D',
+		'C5': 'E',
+		'C6': 'F',
+		'C7': 'G',
+		'C8': 'H',
+		'C9': 'I',
+
+		'D0': '}',
+		'D1': 'J',
+		'D2': 'K',
+		'D3': 'L',
+		'D4': 'M',
+		'D5': 'N',
+		'D6': 'O',
+		'D7': 'P',
+		'D8': 'Q',
+		'D9': 'R',
+
+		'E0': '\\',
+		'E2': 'S',
+		'E3': 'T',
+		'E4': 'U',
+		'E5': 'V',
+		'E6': 'W',
+		'E7': 'X',
+		'E8': 'Y',
+		'E9': 'Z',
+
+		// digits
+		'F0': '0',
+		'F1': '1',
+		'F2': '2',
+		'F3': '3',
+		'F4': '4',
+		'F5': '5',
+		'F6': '6',
+		'F7': '7',
+		'F8': '8',
+		'F9': '9'
+	};
+
+	const asciiToEbcdic = {};
+
+	Object.entries(ebcdicMap).forEach(([hex, value]) => {
+		if (value.length === 1) {
+			asciiToEbcdic[value] = hex;
+		}
+	});
 
 	function hexToEbcdic() {
 		try {
 			error = '';
-			
-			// Clean hex input - remove spaces, newlines, and ensure valid hex
-			let cleanHex = inputData.replace(/\s/g, '').toUpperCase();
-			
-			// Validate hex input
+
+			let cleanHex = inputData
+				.replace(/\s/g, '')
+				.toUpperCase();
+
 			if (!/^[0-9A-F]*$/.test(cleanHex)) {
-				throw new Error('Invalid hex input. Only hex characters (0-9, A-F) are allowed.');
+				throw new Error('Invalid hex input');
 			}
-			
-			// Ensure even number of hex digits
+
 			if (cleanHex.length % 2 !== 0) {
-				cleanHex = '0' + cleanHex;
+				throw new Error('Hex length must be even');
 			}
-			
+
 			let result = '';
+
 			for (let i = 0; i < cleanHex.length; i += 2) {
-				const hexByte = cleanHex.substr(i, 2);
-				const ebcdicCode = parseInt(hexByte, 16);
-				const asciiChar = ebcdicToAscii[ebcdicCode] || '.';
-				result += asciiChar;
+				const byte = cleanHex.substring(i, i + 2);
+
+				result += ebcdicMap[byte] ?? '.';
 			}
-			
+
 			outputData = result;
 		} catch (e) {
-			error = 'Hex to EBCDIC conversion error: ' + e.message;
+			error = e.message;
 		}
 	}
 
 	function ebcdicToHex() {
 		try {
 			error = '';
-			
+
 			let result = '';
-			for (let i = 0; i < inputData.length; i++) {
-				const char = inputData[i];
-				const ebcdicCode = asciiToEbcdic[char];
-				if (ebcdicCode !== undefined) {
-					result += ebcdicCode.toString(16).toUpperCase().padStart(2, '0');
-				} else {
-					// For characters not in the table, use a default or skip
-					result += '00'; // Default to 0x00 for unknown chars
-				}
+
+			for (const char of inputData) {
+				result += asciiToEbcdic[char] ?? '00';
 			}
-			
+
 			outputData = result;
 		} catch (e) {
-			error = 'EBCDIC to Hex conversion error: ' + e.message;
+			error = e.message;
 		}
 	}
 
 	function convert() {
 		if (!inputData.trim()) {
-			error = 'Please enter data to convert';
+			error = 'Please enter data';
 			return;
 		}
-		
+
 		if (conversionMode === 'hexToEbcdic') {
 			hexToEbcdic();
 		} else {
