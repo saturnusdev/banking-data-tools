@@ -7,14 +7,9 @@ export default defineConfig({
     ssr: {
         noExternal: [
             "svelte-hero-icons",
-            "swagger-ui-dist",
             "@apidevtools/swagger-parser",
             "js-yaml",
-            "xlsx",
-            "monaco-editor",
             "xml2js",
-            "terser",
-            "prettier",
             "@iconify/svelte"
         ]
     },
@@ -23,23 +18,21 @@ export default defineConfig({
             'monaco-editor',
             'monaco-editor/esm/vs/editor/editor.worker',
             'monaco-editor/esm/vs/language/json/json.worker'
-        ],
-        force: true
+        ]
     },
     build: {
         rollupOptions: {
             output: {
                 manualChunks: {
                     vendor: ['@iconify/svelte'],
-                    swagger: ['@apidevtools/swagger-parser', 'js-yaml'],
-                    monaco: ['monaco-editor'],
-                    utils: ['xml2js', 'terser', 'prettier']
+                    swagger: ['@apidevtools/swagger-parser', 'js-yaml']
                 }
             }
         },
         chunkSizeWarningLimit: 1000,
         sourcemap: false,
-        minify: 'esbuild'
+        minify: 'esbuild',
+        target: 'esnext'
     },
     server: {
         fs: {
