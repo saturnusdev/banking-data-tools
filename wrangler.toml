@@ -1,5 +1,5 @@
 #:schema node_modules/wrangler/config-schema.json
-name = "data-tools"
+name = "banking-data-tools"
 compatibility_flags = [ "nodejs_compat" ]
 compatibility_date = "2026-06-22"
 [assets]
