@@ -15,11 +15,6 @@ export async function loadYAML() {
 	return yaml;
 }
 
-export async function loadSwaggerParser() {
-	const { default: SwaggerParser } = await import('@apidevtools/swagger-parser');
-	return SwaggerParser;
-}
-
 export async function loadMonacoEditor() {
 	// Disable Monaco Editor source maps
 	if (typeof window !== 'undefined') {
@@ -39,9 +34,4 @@ export async function loadPrettier() {
 	const { default: prettier } = await import('prettier/standalone');
 	const { default: parserBabel } = await import('prettier/plugins/babel');
 	return { prettier, parserBabel };
-}
-
-export async function loadXML2JS() {
-	const { default: xml2js } = await import('xml2js');
-	return xml2js;
 }

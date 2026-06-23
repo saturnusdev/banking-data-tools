@@ -2,7 +2,6 @@
 	import Icon from '@iconify/svelte';
 
 	import { onMount } from 'svelte';
-	import xml2js from 'xml2js';
 
 	// EBCDIC Hex Table
 	const ebcdicTable = {

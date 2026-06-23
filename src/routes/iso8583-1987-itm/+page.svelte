@@ -6,6 +6,7 @@
 	let error = '';
 	let messageType = '';
 	let showHexView = false;
+	let isProcessing = false;
 
 	// ISO8583:1987 Field definitions for ITM Banking
 	const fieldDefinitions = {
@@ -229,6 +230,7 @@
 
 	function parseIsoMessage() {
 		try {
+			isProcessing = true;
 			error = '';
 			parsedData = {};
 
@@ -298,6 +300,8 @@
 
 		} catch (e) {
 			error = 'ISO8583 parsing error: ' + e.message;
+		} finally {
+			isProcessing = false;
 		}
 	}
 
@@ -372,158 +376,224 @@
 	}
 </script>
 
-<main class="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
-	<section>
-		<div class="flex">
-			<div class="w-10 flex-none content-center justify-items-center">
-				<button
-					class="cursor-pointer"
-					on:click={() => {
-						location.href = '/';
-					}}
-				>
-					<Icon icon="mdi-light:arrow-left" style="font-size:x-large" />
-				</button>
-			</div>
-			<div class="flex-auto">
-				<h1 class="text-2xl font-bold text-gray-800">ISO8583:1987 ITM Banking Parser</h1>
-				<p class="text-gray-600">Parse ISO8583:1987 messages with ITM banking field definitions and context</p>
+<main class="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
+	<!-- Header Section -->
+	<header class="bg-white shadow-lg border-b border-purple-100">
+		<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+			<div class="flex items-center justify-between">
+				<div class="flex items-center space-x-4">
+					<button
+						class="group rounded-full p-2 text-purple-600 transition-all hover:bg-purple-100 hover:scale-110"
+						on:click={() => {
+							location.href = '/';
+						}}
+					>
+						<Icon icon="mdi-light:arrow-left" class="h-6 w-6 transition-transform group-hover:-translate-x-1" />
+					</button>
+					<div class="flex items-center space-x-3">
+						<div class="rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 p-3">
+							<Icon icon="mdi-light:bank" class="h-8 w-8 text-white" />
+						</div>
+						<div>
+							<h1 class="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+								ISO8583:1987 ITM Banking Parser
+							</h1>
+							<p class="text-gray-600 mt-1">
+								Parse ISO8583:1987 messages with ITM banking field definitions and context
+							</p>
+						</div>
+					</div>
+				</div>
 			</div>
 		</div>
-	</section>
+	</header>
 
-	<section>
-		<div class="space-y-4">
-			<!-- Input Area -->
-			<div class="bg-white rounded-lg border border-gray-200 p-4">
-				<div class="flex justify-between items-center mb-4">
-					<h2 class="text-lg font-semibold text-gray-700">ISO8583 Message (Hex)</h2>
-					<div class="space-x-2">
+	<!-- Main Content -->
+	<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+		<!-- Input Section -->
+		<section class="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+			<div class="bg-gradient-to-r from-indigo-500 to-purple-500 p-6">
+				<div class="flex items-center justify-between">
+					<div class="flex items-center space-x-3">
+						<Icon icon="mdi-light:file-document-edit" class="h-6 w-6 text-white" />
+						<h2 class="text-xl font-bold text-white">ISO8583 Message (Hex)</h2>
+					</div>
+					<div class="flex space-x-3">
 						<button
 							on:click={parseIsoMessage}
-							class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+							disabled={isProcessing}
+							class="group relative overflow-hidden rounded-lg bg-gradient-to-r from-indigo-500 to-purple-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:from-indigo-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
 						>
-							Parse Message
+							<span class="relative z-10 flex items-center space-x-2">
+								{#if isProcessing}
+									<Icon icon="mdi-light:loading" class="h-4 w-4 animate-spin" />
+									<span>Processing...</span>
+								{:else}
+									<Icon icon="mdi-light:magnify" class="h-4 w-4" />
+									<span>Parse Message</span>
+								{/if}
+							</span>
 						</button>
 						<button
 							on:click={clearAll}
-							class="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
+							class="group relative overflow-hidden rounded-lg bg-gradient-to-r from-red-500 to-rose-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:from-red-600 hover:to-rose-600 shadow-lg hover:shadow-xl"
 						>
-							Clear
+							<span class="relative z-10 flex items-center space-x-2">
+								<Icon icon="mdi-light:delete" class="h-4 w-4" />
+								<span>Clear</span>
+							</span>
 						</button>
 					</div>
 				</div>
+			</div>
+			<div class="p-6">
 				<textarea
 					bind:value={isoMessage}
 					placeholder="Enter ISO8583 message in hex format (e.g., 0200B2200000001000000000000000000000...)"
-					class="w-full h-32 p-4 border border-gray-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+					class="w-full h-40 rounded-xl border-2 border-gray-200 p-4 font-mono text-sm transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 resize-none"
 				></textarea>
 			</div>
+		</section>
 
-			<!-- Error Display -->
-			{#if error}
-				<div class="bg-red-50 border border-red-200 rounded-lg p-4">
-					<div class="flex">
-						<Icon icon="mdi-light:alert" class="text-red-500 mr-2" style="font-size: 1.25rem" />
-						<p class="text-sm text-red-700">{error}</p>
+		<!-- Error Display -->
+		{#if error}
+			<section class="bg-gradient-to-r from-red-50 to-rose-50 rounded-2xl shadow-xl border border-red-100 overflow-hidden">
+				<div class="bg-gradient-to-r from-red-500 to-rose-500 p-4">
+					<div class="flex items-center space-x-3">
+						<Icon icon="mdi-light:alert" class="h-5 w-5 text-white" />
+						<h3 class="text-lg font-bold text-white">Error</h3>
 					</div>
 				</div>
-			{/if}
+				<div class="p-6">
+					<div class="flex items-center space-x-3">
+						<div class="rounded-full bg-red-100 p-2">
+							<Icon icon="mdi-light:alert-circle" class="h-6 w-6 text-red-600" />
+						</div>
+						<p class="text-red-800 font-medium">{error}</p>
+					</div>
+				</div>
+			</section>
+		{/if}
 
-			<!-- Parsed Results -->
-			{#if Object.keys(parsedData).length > 0}
-				<!-- Message Header -->
-				<div class="bg-white rounded-lg border border-gray-200 p-4">
-					<div class="flex justify-between items-center mb-4">
-						<h2 class="text-lg font-semibold text-gray-700">Message Header</h2>
-						<div class="space-x-2">
+		<!-- Parsed Results -->
+		{#if Object.keys(parsedData).length > 0}
+			<!-- Message Header -->
+			<section class="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+				<div class="bg-gradient-to-r from-gray-700 to-gray-900 p-6">
+					<div class="flex items-center justify-between">
+						<div class="flex items-center space-x-3">
+							<Icon icon="mdi-light:information" class="h-6 w-6 text-white" />
+							<h2 class="text-xl font-bold text-white">Message Header</h2>
+						</div>
+						<div class="flex space-x-3">
 							<button
 								on:click={toggleHexView}
-								class="px-3 py-2 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors"
+								class="rounded-lg bg-white/20 px-4 py-2 text-sm text-white backdrop-blur-sm transition-all hover:bg-white/30"
 							>
 								{showHexView ? 'Show Parsed' : 'Show Hex'}
 							</button>
 							<button
 								on:click={copyToClipboard}
-								class="px-4 py-2 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors"
+								class="rounded-lg bg-white/20 px-4 py-2 text-sm text-white backdrop-blur-sm transition-all hover:bg-white/30"
 							>
+								<Icon icon="mdi-light:content-copy" class="h-4 w-4 mr-1" />
 								Copy JSON
 							</button>
 						</div>
 					</div>
-					
-					<div class="space-y-3">
-						<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-							<div class="bg-gray-50 p-3 rounded">
-								<span class="text-sm font-semibold text-gray-600">Message Type:</span>
-								<p class="text-lg font-mono">{parsedData.mti?.ascii}</p>
-								<p class="text-sm text-gray-600">{parsedData.mti?.description}</p>
+				</div>
+				<div class="p-6">
+					<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+						<div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-100">
+							<div class="flex items-center space-x-3 mb-3">
+								<div class="rounded-full bg-indigo-100 p-2">
+									<Icon icon="mdi-light:message-text" class="h-5 w-5 text-indigo-600" />
+								</div>
+								<span class="text-sm font-semibold text-indigo-800">Message Type</span>
 							</div>
-							<div class="bg-gray-50 p-3 rounded">
-								<span class="text-sm font-semibold text-gray-600">Primary Bitmap:</span>
-								<p class="text-lg font-mono">{parsedData.bitmap?.hex}</p>
-								<p class="text-sm text-gray-600">Fields present: {parsedData.bitmap?.presentFields?.join(', ')}</p>
+							<p class="text-2xl font-mono font-bold text-indigo-900">{parsedData.mti?.ascii}</p>
+							<p class="text-sm text-indigo-700 mt-1">{parsedData.mti?.description}</p>
+						</div>
+						<div class="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-100">
+							<div class="flex items-center space-x-3 mb-3">
+								<div class="rounded-full bg-purple-100 p-2">
+									<Icon icon="mdi-light:grid" class="h-5 w-5 text-purple-600" />
+								</div>
+								<span class="text-sm font-semibold text-purple-800">Primary Bitmap</span>
 							</div>
-							<div class="bg-gray-50 p-3 rounded">
-								<span class="text-sm font-semibold text-gray-600">Total Fields:</span>
-								<p class="text-lg">{parsedData.bitmap?.presentFields?.length || 0}</p>
-								<p class="text-sm text-gray-600">Including bitmap</p>
+							<p class="text-lg font-mono font-bold text-purple-900">{parsedData.bitmap?.hex}</p>
+							<p class="text-sm text-purple-700 mt-1">Fields: {parsedData.bitmap?.presentFields?.join(', ')}</p>
+						</div>
+						<div class="bg-gradient-to-br from-pink-50 to-rose-50 rounded-xl p-6 border border-pink-100">
+							<div class="flex items-center space-x-3 mb-3">
+								<div class="rounded-full bg-pink-100 p-2">
+									<Icon icon="mdi-light:counter" class="h-5 w-5 text-pink-600" />
+								</div>
+								<span class="text-sm font-semibold text-pink-800">Total Fields</span>
 							</div>
+							<p class="text-3xl font-bold text-pink-900">{parsedData.bitmap?.presentFields?.length || 0}</p>
+							<p class="text-sm text-pink-700 mt-1">Including bitmap</p>
 						</div>
 					</div>
 				</div>
+			</section>
 
-				<!-- Field Details -->
-				<div class="bg-white rounded-lg border border-gray-200 p-4">
-					<h2 class="text-lg font-semibold text-gray-700 mb-4">Field Details</h2>
-					
+			<!-- Field Details -->
+			<section class="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+				<div class="bg-gradient-to-r from-indigo-500 to-purple-500 p-6">
+					<div class="flex items-center space-x-3">
+						<Icon icon="mdi-light:format-list-bulleted" class="h-6 w-6 text-white" />
+						<h2 class="text-xl font-bold text-white">Field Details</h2>
+					</div>
+				</div>
+				<div class="p-6">
 					{#if showHexView}
-						<div class="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-							<pre>{JSON.stringify(parsedData, null, 2)}</pre>
+						<div class="rounded-xl bg-gray-900 p-6 font-mono text-sm text-green-400 overflow-auto max-h-96">
+							<pre class="whitespace-pre-wrap break-words">{JSON.stringify(parsedData, null, 2)}</pre>
 						</div>
 					{:else}
-						<div class="space-y-3">
+						<div class="space-y-4">
 							{#each Object.keys(parsedData.fields || {}).sort((a, b) => parseInt(a) - parseInt(b)) as fieldNum}
 								{@const field = parsedData.fields[fieldNum]}
-								<div class="border border-gray-200 rounded-lg p-4">
-									<div class="flex justify-between items-start mb-2">
+								<div class="rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 p-6 border border-gray-200">
+									<div class="flex justify-between items-start mb-4">
 										<div>
-											<h3 class="font-semibold text-gray-800">Field {fieldNum}: {field.name}</h3>
+											<h3 class="text-lg font-bold text-gray-800">Field {fieldNum}: {field.name}</h3>
 											<p class="text-sm text-gray-600">{field.description}</p>
 										</div>
-										<span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">{field.type}</span>
+										<span class="px-3 py-1 text-xs font-semibold bg-indigo-100 text-indigo-800 rounded-full">{field.type}</span>
 									</div>
 									
 									<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 										<div>
 											<span class="text-sm font-semibold text-gray-600">Value:</span>
-											<p class="font-mono text-sm bg-gray-50 p-2 rounded">{field.value || '(empty)'}</p>
+											<p class="font-mono text-sm bg-white p-3 rounded-lg border border-gray-200 mt-1">{field.value || '(empty)'}</p>
 										</div>
 										<div>
 											<span class="text-sm font-semibold text-gray-600">Raw Hex:</span>
-											<p class="font-mono text-sm bg-gray-50 p-2 rounded">{field.rawHex || '(empty)'}</p>
+											<p class="font-mono text-sm bg-white p-3 rounded-lg border border-gray-200 mt-1">{field.rawHex || '(empty)'}</p>
 										</div>
 									</div>
 
 									<!-- ITM-specific interpretations -->
 									{#if field.formatted}
-										<div class="mt-2">
-											<span class="text-sm font-semibold text-gray-600">Formatted:</span>
-											<p class="text-sm font-medium text-green-700">{field.formatted}</p>
+										<div class="mt-4 bg-green-50 rounded-lg p-3 border border-green-200">
+											<span class="text-sm font-semibold text-green-800">Formatted:</span>
+											<p class="text-sm font-medium text-green-700 mt-1">{field.formatted}</p>
 										</div>
 									{/if}
 									
 									{#if field.currencyName}
-										<div class="mt-2">
-											<span class="text-sm font-semibold text-gray-600">Currency:</span>
-											<p class="text-sm text-blue-700">{field.currencyName}</p>
+										<div class="mt-4 bg-blue-50 rounded-lg p-3 border border-blue-200">
+											<span class="text-sm font-semibold text-blue-800">Currency:</span>
+											<p class="text-sm text-blue-700 mt-1">{field.currencyName}</p>
 										</div>
 									{/if}
 									
 									{#if field.interpretation}
-										<div class="mt-2">
-											<span class="text-sm font-semibold text-gray-600">Processing Code Breakdown:</span>
-											<div class="text-sm space-y-1">
+										<div class="mt-4 bg-purple-50 rounded-lg p-3 border border-purple-200">
+											<span class="text-sm font-semibold text-purple-800">Processing Code Breakdown:</span>
+											<div class="text-sm space-y-1 mt-1 text-purple-700">
 												<p>First 2 digits: {field.interpretation.firstTwo}</p>
 												<p>Next 2 digits: {field.interpretation.nextTwo}</p>
 												<p>Last 2 digits: {field.interpretation.lastTwo}</p>
@@ -532,9 +602,9 @@
 									{/if}
 									
 									{#if field.posDetails}
-										<div class="mt-2">
-											<span class="text-sm font-semibold text-gray-600">POS Entry Mode Details:</span>
-											<div class="text-sm space-y-1">
+										<div class="mt-4 bg-pink-50 rounded-lg p-3 border border-pink-200">
+											<span class="text-sm font-semibold text-pink-800">POS Entry Mode Details:</span>
+											<div class="text-sm space-y-1 mt-1 text-pink-700">
 												<p>PAN Entry: {field.posDetails.panEntry}</p>
 												<p>PIN Entry: {field.posDetails.pinEntry}</p>
 												<p>Cardholder Terminal: {field.posDetails.cardholderTerminal}</p>
@@ -546,39 +616,78 @@
 						</div>
 					{/if}
 				</div>
-			{/if}
+			</section>
+		{/if}
 
-			<!-- ITM Banking Info -->
-			<div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-				<h3 class="text-lg font-semibold text-blue-800 mb-2">ITM Banking Context</h3>
-				<div class="text-sm text-blue-700 space-y-2">
-					<p><strong>ITM Banking</strong> uses ISO8583:1987 standard for interbank transactions in Indonesia.</p>
-					<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-						<div>
-							<h4 class="font-semibold mb-1">Common Message Types:</h4>
-							<ul class="list-disc list-inside space-y-1 text-xs">
-								<li><strong>0200</strong> - Purchase/Financial Request</li>
-								<li><strong>0210</strong> - Purchase/Financial Response</li>
-								<li><strong>0400</strong> - Reversal Request</li>
-								<li><strong>0410</strong> - Reversal Response</li>
-								<li><strong>0100</strong> - Authorization Request</li>
-								<li><strong>0110</strong> - Authorization Response</li>
-							</ul>
+		<!-- ITM Banking Info -->
+		<section class="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-2xl shadow-xl border border-blue-100 overflow-hidden">
+			<div class="bg-gradient-to-r from-blue-500 to-cyan-500 p-6">
+				<div class="flex items-center space-x-3">
+					<Icon icon="mdi-light:information" class="h-6 w-6 text-white" />
+					<h2 class="text-xl font-bold text-white">ITM Banking Context</h2>
+				</div>
+			</div>
+			<div class="p-6 space-y-6">
+				<div class="bg-white/50 backdrop-blur-sm rounded-xl p-6 border border-blue-200">
+					<p class="text-blue-800 leading-relaxed">
+						<strong class="text-blue-900">ITM Banking</strong> uses ISO8583:1987 standard for interbank transactions in Indonesia.
+					</p>
+				</div>
+				<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+					<div class="bg-white/50 backdrop-blur-sm rounded-xl p-6 border border-blue-200">
+						<div class="flex items-center space-x-3 mb-4">
+							<div class="rounded-full bg-blue-100 p-2">
+								<Icon icon="mdi-light:message-text" class="h-5 w-5 text-blue-600" />
+							</div>
+							<h3 class="font-bold text-blue-800">Common Message Types</h3>
 						</div>
-						<div>
-							<h4 class="font-semibold mb-1">Key Banking Fields:</h4>
-							<ul class="list-disc list-inside space-y-1 text-xs">
-								<li><strong>Field 4</strong> - Transaction Amount (IDR)</li>
-								<li><strong>Field 11</strong> - System Trace Audit Number</li>
-								<li><strong>Field 37</strong> - Retrieval Reference Number</li>
-								<li><strong>Field 39</strong> - Response Code (00=Approved)</li>
-								<li><strong>Field 49</strong> - Currency Code (360=IDR)</li>
-								<li><strong>Field 52</strong> - PIN Block (encrypted)</li>
-							</ul>
+						<div class="space-y-2">
+							{#each [
+								{ code: '0200', desc: 'Purchase/Financial Request' },
+								{ code: '0210', desc: 'Purchase/Financial Response' },
+								{ code: '0400', desc: 'Reversal Request' },
+								{ code: '0410', desc: 'Reversal Response' },
+								{ code: '0100', desc: 'Authorization Request' },
+								{ code: '0110', desc: 'Authorization Response' }
+							] as msg}
+							<div class="flex items-start space-x-3">
+								<Icon icon="mdi-light:check-circle" class="h-4 w-4 text-blue-600 mt-0.5" />
+								<div>
+									<p class="font-semibold text-blue-800">{msg.code}</p>
+									<p class="text-sm text-blue-700">{msg.desc}</p>
+								</div>
+							</div>
+							{/each}
+						</div>
+					</div>
+					<div class="bg-white/50 backdrop-blur-sm rounded-xl p-6 border border-blue-200">
+						<div class="flex items-center space-x-3 mb-4">
+							<div class="rounded-full bg-blue-100 p-2">
+								<Icon icon="mdi-light:key" class="h-5 w-5 text-blue-600" />
+							</div>
+							<h3 class="font-bold text-blue-800">Key Banking Fields</h3>
+						</div>
+						<div class="space-y-2">
+							{#each [
+								{ field: 'Field 4', desc: 'Transaction Amount (IDR)' },
+								{ field: 'Field 11', desc: 'System Trace Audit Number' },
+								{ field: 'Field 37', desc: 'Retrieval Reference Number' },
+								{ field: 'Field 39', desc: 'Response Code (00=Approved)' },
+								{ field: 'Field 49', desc: 'Currency Code (360=IDR)' },
+								{ field: 'Field 52', desc: 'PIN Block (encrypted)' }
+							] as field}
+							<div class="flex items-start space-x-3">
+								<Icon icon="mdi-light:check-circle" class="h-4 w-4 text-blue-600 mt-0.5" />
+								<div>
+									<p class="font-semibold text-blue-800">{field.field}</p>
+									<p class="text-sm text-blue-700">{field.desc}</p>
+								</div>
+							</div>
+							{/each}
 						</div>
 					</div>
 				</div>
 			</div>
-		</div>
-	</section>
+		</section>
+	</div>
 </main>

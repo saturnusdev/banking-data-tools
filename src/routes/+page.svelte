@@ -112,16 +112,11 @@
 	<header class="bg-white shadow-lg border-b border-purple-100">
 		<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
 			<div class="text-center">
-				<div class="flex justify-center mb-6">
-					<div class="rounded-full bg-gradient-to-r from-purple-500 to-pink-500 p-4">
-						<SafeIcon icon="mdi-light:bank-circle" class="h-12 w-12 text-white" />
-					</div>
-				</div>
 				<h1 class="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
 					Banking Data Tools
 				</h1>
 				<p class="text-xl text-gray-600 max-w-3xl mx-auto">
-					Professional data processing tools for developers and data analysts
+					Tools to support engineering team in banking domain for data processing and analysis
 				</p>
 			</div>
 		</div>
@@ -168,7 +163,7 @@
 				<p class="text-gray-600 max-w-2xl mx-auto">
 					Our comprehensive suite of data tools provides everything you need for data parsing, 
 					format conversion, and code optimization. Built with modern web technologies 
-					for maximum performance and usability. Powered by Hady Eka Saputra
+					for maximum performance and usability. Powered by <a href="https://id.linkedin.com/in/hady-eka-saputra" target="_blank" class="text-purple-600 hover:text-purple-700">Hady Eka Saputra</a>
 				</p>
 			</div>
 		</footer>

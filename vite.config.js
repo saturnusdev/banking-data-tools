@@ -7,9 +7,7 @@ export default defineConfig({
     ssr: {
         noExternal: [
             "svelte-hero-icons",
-            "@apidevtools/swagger-parser",
             "js-yaml",
-            "xml2js",
             "@iconify/svelte"
         ]
     },
@@ -25,7 +23,7 @@ export default defineConfig({
             output: {
                 manualChunks: {
                     vendor: ['@iconify/svelte'],
-                    swagger: ['@apidevtools/swagger-parser', 'js-yaml']
+                    utils: ['js-yaml']
                 }
             }
         },
@@ -36,14 +34,23 @@ export default defineConfig({
     },
     server: {
         fs: {
-            // Allow serving static files from node_modules
             allow: ['..']
         }
     },
     define: {
-        // Disable Monaco Editor source maps
         'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
         'MONACO_EDITOR_SOURCEMAP': JSON.stringify(false)
     },
-    plugins: [tailwindcss(), sveltekit(), monacoFixPlugin()] 
+    plugins: [tailwindcss(), sveltekit(), monacoFixPlugin()],
+    resolve: {
+		alias: {
+			util: 'node:util',
+            events: 'node:events',
+			timers: 'node:timers',
+            path: 'node:path',
+            stream: 'node:stream',
+            string_decoder: 'node:string_decoder',
+            buffer: 'node:buffer'
+		}
+	}
 });
