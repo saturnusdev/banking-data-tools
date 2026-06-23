@@ -21,15 +21,15 @@
 	});
 
 	let editorEl: HTMLDivElement;
-	let editor: any;
+	let editor = $state<any>();
 
-	let tree: TreeNode[] = [];
-	let showTree = true;
-	let diffData: { original: string; modified: string } | null = null;
-	let error = '';
-	let success = '';
-	let rawJsonText = '';
-	let showValidationSection = false;
+	let tree = $state<TreeNode[]>([]);
+	let showTree = $state(true);
+	let diffData = $state<{ original: string; modified: string } | null>(null);
+	let error = $state('');
+	let success = $state('');
+	let rawJsonText = $state('');
+	let showValidationSection = $state(false);
 
 	onMount(async () => {
 		editor = await createJsonEditor(editorEl);
@@ -112,7 +112,7 @@
 				<div class="flex items-center space-x-4">
 					<button
 						class="group rounded-full p-2 text-purple-600 transition-all hover:bg-purple-100 hover:scale-110"
-						on:click={() => {location.href = "/"}}
+						onclick={() => {location.href = "/"}}
 					>
 						<SafeIcon iconName="mdi-light:arrow-left" customClass="h-6 w-6 transition-transform group-hover:-translate-x-1" />
 					</button>

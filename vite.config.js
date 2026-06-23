@@ -5,7 +5,18 @@ import { monacoFixPlugin } from './vite-plugin-monaco-fix';
 
 export default defineConfig({ 
     ssr: {
-        noExternal: ["svelte-hero-icons"]
+        noExternal: [
+            "svelte-hero-icons",
+            "swagger-ui-dist",
+            "@apidevtools/swagger-parser",
+            "js-yaml",
+            "xlsx",
+            "monaco-editor",
+            "xml2js",
+            "terser",
+            "prettier",
+            "@iconify/svelte"
+        ]
     },
     optimizeDeps: {
         exclude: [
@@ -20,15 +31,14 @@ export default defineConfig({
             output: {
                 manualChunks: {
                     vendor: ['@iconify/svelte'],
-                    swagger: ['swagger-ui-dist', '@apidevtools/swagger-parser', 'js-yaml'],
-                    excel: ['xlsx'],
+                    swagger: ['@apidevtools/swagger-parser', 'js-yaml'],
                     monaco: ['monaco-editor'],
                     utils: ['xml2js', 'terser', 'prettier']
                 }
             }
         },
         chunkSizeWarningLimit: 1000,
-        sourcemap: false, // Disable source maps to avoid Monaco Editor issues
+        sourcemap: false,
         minify: 'esbuild'
     },
     server: {
