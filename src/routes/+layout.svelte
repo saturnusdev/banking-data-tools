@@ -1,8 +1,8 @@
 <script>
 	import './layout.css';
-	import favicon from '$lib/assets/favicon.svg';
+	import favicon from '#lib/assets/favicon.svg';
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 
 	let { children } = $props();
 
@@ -13,7 +13,7 @@
 		keywords: 'JSON tools, data parser, ISO8583, DFDL, Base64 decoder, banking data, data processing, developer tools',
 		author: 'Hady Eka Saputra',
 		image: '/og-image.png',
-		url: `https://www.banking-tools.java-sc.com${$page.url.pathname}`,
+		url: `https://www.banking-tools.java-sc.com${page.url.pathname}`,
 		type: 'website'
 	});
 

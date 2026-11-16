@@ -299,7 +299,7 @@
 				<div class="flex items-center space-x-4">
 					<button
 						class="group rounded-full p-2 text-purple-600 transition-all hover:bg-purple-100 hover:scale-110"
-						on:click={() => {
+						onclick={() => {
 							location.href = '/';
 						}}
 					>
@@ -403,7 +403,7 @@
 								<select
 									id="stored-files"
 									bind:value={selectedStoredFile}
-									on:change={() => selectStoredFile(selectedStoredFile)}
+									onchange={() => selectStoredFile(selectedStoredFile)}
 									class="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all text-sm"
 								>
 									<option value="">-- Select stored file --</option>
@@ -413,7 +413,7 @@
 								</select>
 								{#if selectedStoredFile}
 									<button
-										on:click={() => deleteStoredFile(selectedStoredFile)}
+										onclick={() => deleteStoredFile(selectedStoredFile)}
 										class="px-4 py-3 bg-red-500 text-white rounded-xl hover:bg-red-600 text-sm transition-all"
 										title="Delete stored file"
 									>
@@ -429,7 +429,7 @@
 						type="file"
 						id="dfdl-file"
 						accept=".xml,.xsd"
-						on:change={handleFileUpload}
+						onchange={handleFileUpload}
 						class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
 					/>
 					{#if dfdlFile}
@@ -487,7 +487,7 @@
 				<!-- Action Buttons -->
 				<div class="flex flex-col sm:flex-row gap-4">
 					<button
-						on:click={processParsing}
+						onclick={processParsing}
 						disabled={loading}
 						class="group relative overflow-hidden rounded-lg bg-gradient-to-r from-indigo-500 to-purple-500 px-6 py-3 font-semibold text-white transition-all hover:from-indigo-600 hover:to-purple-600 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
 					>
@@ -498,7 +498,7 @@
 					</button>
 					
 					<button
-						on:click={resetForm}
+						onclick={resetForm}
 						class="group relative overflow-hidden rounded-lg bg-gray-500 px-6 py-3 font-semibold text-white transition-all hover:bg-gray-600 hover:shadow-lg"
 					>
 						<span class="relative z-10 flex items-center space-x-2">
@@ -539,7 +539,7 @@
 							<h2 class="text-xl font-bold text-white">Parsing Results</h2>
 						</div>
 						<button
-							on:click={downloadResults}
+							onclick={downloadResults}
 							class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 						>
 							<span class="relative z-10 flex items-center space-x-2">

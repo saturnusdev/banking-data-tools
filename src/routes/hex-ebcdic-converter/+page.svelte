@@ -1,22 +1,24 @@
 <script>
 	import Icon from '@iconify/svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 
-	let inputData = '';
-	let outputData = '';
-	let conversionMode = 'hexToEbcdic'; // 'hexToEbcdic' or 'ebcdicToHex'
-	let error = '';
+	let inputData = $state('');
+	let outputData = $state('');
+	let conversionMode = $state('hexToEbcdic'); // 'hexToEbcdic' or 'ebcdicToHex'
+	let error = $state('');
 
 	// Check for hex parameter in URL
-	$: if ($page.url.searchParams.has('hex')) {
-		const hexParam = $page.url.searchParams.get('hex');
-		if (hexParam) {
-			inputData = hexParam;
-			conversionMode = 'hexToEbcdic';
-			// Auto-convert
-			convert();
+	$effect(() => {
+		if (page.url.searchParams.has('hex')) {
+			const hexParam = page.url.searchParams.get('hex');
+			if (hexParam) {
+				inputData = hexParam;
+				conversionMode = 'hexToEbcdic';
+				// Auto-convert
+				convert();
+			}
 		}
-	}
+	});
 
 	// Converted from your original switch statement
 	const ebcdicMap = {
@@ -246,7 +248,7 @@
 				<div class="flex items-center space-x-4">
 					<button
 						class="group rounded-full p-2 text-purple-600 transition-all hover:bg-purple-100 hover:scale-110"
-						on:click={() => {
+						onclick={() => {
 							location.href = '/';
 						}}
 					>
@@ -282,7 +284,7 @@
 						<h2 class="text-xl font-bold text-white">Conversion Mode</h2>
 					</div>
 					<button
-						on:click={swapConversion}
+						onclick={swapConversion}
 						class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 						title="Swap input/output and conversion mode"
 					>
@@ -297,7 +299,7 @@
 				<div class="flex justify-center">
 					<div class="inline-flex rounded-xl bg-gray-100 p-1">
 						<button
-							on:click={() => conversionMode = 'hexToEbcdic'}
+							onclick={() => conversionMode = 'hexToEbcdic'}
 							class="rounded-lg px-6 py-3 text-sm font-medium transition-all {conversionMode === 'hexToEbcdic'
 								? 'bg-white text-pink-600 shadow-md'
 								: 'text-gray-600 hover:text-gray-800'}"
@@ -308,7 +310,7 @@
 							</span>
 						</button>
 						<button
-							on:click={() => conversionMode = 'ebcdicToHex'}
+							onclick={() => conversionMode = 'ebcdicToHex'}
 							class="rounded-lg px-6 py-3 text-sm font-medium transition-all {conversionMode === 'ebcdicToHex'
 								? 'bg-white text-pink-600 shadow-md'
 								: 'text-gray-600 hover:text-gray-800'}"
@@ -335,7 +337,7 @@
 					</div>
 					<div class="flex space-x-3">
 						<button
-							on:click={convert}
+							onclick={convert}
 							class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 						>
 							<span class="relative z-10 flex items-center space-x-2">
@@ -344,7 +346,7 @@
 							</span>
 						</button>
 						<button
-							on:click={clearAll}
+							onclick={clearAll}
 							class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 						>
 							<span class="relative z-10 flex items-center space-x-2">
@@ -377,7 +379,7 @@
 						</h2>
 					</div>
 					<button
-						on:click={copyToClipboard}
+						onclick={copyToClipboard}
 						class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 					>
 						<span class="relative z-10 flex items-center space-x-2">

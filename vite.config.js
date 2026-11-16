@@ -1,7 +1,9 @@
 import tailwindcss from '@tailwindcss/vite';
+import { fileURLToPath } from 'node:url';
+import adapter from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
-import { monacoFixPlugin } from './vite-plugin-monaco-fix';
+import { monacoFixPlugin } from './vite-plugin-monaco-fix.js';
 
 export default defineConfig({ 
     ssr: {
@@ -21,9 +23,9 @@ export default defineConfig({
     build: {
         rollupOptions: {
             output: {
-                manualChunks: {
-                    vendor: ['@iconify/svelte'],
-                    utils: ['js-yaml']
+                manualChunks(id) {
+                    if (id.includes('@iconify/svelte')) return 'vendor';
+                    if (id.includes('js-yaml')) return 'utils';
                 }
             }
         },
@@ -41,9 +43,10 @@ export default defineConfig({
         'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
         'MONACO_EDITOR_SOURCEMAP': JSON.stringify(false)
     },
-    plugins: [tailwindcss(), sveltekit(), monacoFixPlugin()],
+    plugins: [tailwindcss(), sveltekit({ adapter: adapter() }), monacoFixPlugin()],
     resolve: {
 		alias: {
+			'#lib': fileURLToPath(new URL('./src/lib', import.meta.url)),
 			util: 'node:util',
             events: 'node:events',
 			timers: 'node:timers',

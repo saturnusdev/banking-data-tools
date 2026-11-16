@@ -1,6 +1,6 @@
 <script>
 	import Icon from '@iconify/svelte';
-	import { ISO8583 } from '$lib/plugin/iso8583/iso8583Parser';
+	import { ISO8583 } from '#lib/plugin/iso8583/iso8583Parser';
 
 	let inputMessage = '';
 	let properties = null;
@@ -51,7 +51,7 @@
 				<div class="flex items-center space-x-4">
 					<button
 						class="group rounded-full p-2 text-purple-600 transition-all hover:bg-purple-100 hover:scale-110"
-						on:click={() => {
+						onclick={() => {
 							location.href = '/';
 						}}
 					>
@@ -86,7 +86,7 @@
 				</div>
 			</div>
 			<div class="p-6">
-				<form on:submit|preventDefault={parseMessage} class="space-y-6">
+				<form onsubmit={(e) => { e.preventDefault(); parseMessage(); }} class="space-y-6">
 					<div>
 						<label for="input" class="block text-sm font-medium text-gray-700 mb-2">
 							ISO 8583 Message

@@ -1,16 +1,14 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
-	import { filterByKey } from '$lib/json/filter';
-	import SafeIcon from '$lib/SafeIcon.svelte';
-	// import { registerJsonSchema } from '$lib/plugin/monaco/schema';
-	// import { schemas } from '$lib/json/schemas';
+	import { filterByKey } from '#lib/json/filter';
+	import SafeIcon from '#lib/SafeIcon.svelte';
+	// import { registerJsonSchema } from '#lib/plugin/monaco/schema';
+	// import { schemas } from '#lib/json/schemas';
 
-	export let editor: any;
-	const dispatch = createEventDispatcher();
+	let { editor, onshowdiff, onshowerror, onshowsuccess, oncontentchanged, ontoggleTree } = $props();
 
-	let filterKey = '';
-	let filterValue = '';
-	let schemaKey = '';
+	let filterKey = $state('');
+	let filterValue = $state('');
+	let schemaKey = $state('');
 
 	async function beautify() {
 		editor.getAction('editor.action.formatDocument').run();
@@ -21,7 +19,7 @@
 		const parsed = JSON.parse(original);
 		const result = filterByKey(parsed, filterKey, filterValue || undefined);
 
-		dispatch('showDiff', {
+		onshowdiff?.({
 			original,
 			modified: JSON.stringify(result, null, 2)
 		});
@@ -162,7 +160,7 @@
 
 	function repairJSON(input: string) {
 		if (!input?.trim()) {
-			dispatch('showError', 'Empty input');
+			onshowerror?.('Empty input');
 			return input;
 		}
 
@@ -436,13 +434,13 @@
 
 			repaired = JSON.stringify(parsed, null, 2);
 
-			dispatch('showSuccess', `JSON repaired with advanced fixes (${causes.length})`);
+			onshowsuccess?.(`JSON repaired with advanced fixes (${causes.length})`);
 
 			console.log(causes);
 
 			return repaired;
 		} catch (e: any) {
-			dispatch('showError', 'Could not repair JSON: ' + e.message);
+			onshowerror?.('Could not repair JSON: ' + e.message);
 
 			return input;
 		}
@@ -453,9 +451,9 @@
 		const result = validateJSON(input);
 
 		if (result.valid) {
-			dispatch('showSuccess', 'Valid JSON!');
+			onshowsuccess?.('Valid JSON!');
 		} else {
-			dispatch('showError', 'Invalid JSON: ' + result.error);
+			onshowerror?.('Invalid JSON: ' + result.error);
 		}
 	}
 
@@ -466,7 +464,7 @@
 		// Update the editor with repaired content
 		if (repaired !== input) {
 			editor.setValue(repaired);
-			dispatch('contentChanged', repaired);
+			oncontentchanged?.(repaired);
 		}
 	}
 </script>
@@ -484,13 +482,13 @@
 	/>
 	<button
 		class="cursor-pointer rounded bg-blue-500 px-3 py-1 text-white transition-colors hover:bg-blue-600"
-		on:click={applyFilter}>Filter</button
+		onclick={applyFilter}>Filter</button
 	>
 
 	<select
 		class="rounded border border-gray-300 bg-white px-2 py-1 focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
 		bind:value={schemaKey}
-		on:change={applySchema}
+		onchange={applySchema}
 	>
 		<option value="">Schema</option>
 		<option value="user">User</option>
@@ -501,7 +499,7 @@
 
 	<button
 		class="cursor-pointer rounded bg-green-500 px-3 py-1 text-white transition-colors hover:bg-green-600"
-		on:click={validateCurrentJSON}
+		onclick={validateCurrentJSON}
 		title="Validate JSON"
 	>
 		<span class="relative z-10 flex items-center justify-center space-x-2">
@@ -511,14 +509,14 @@
 	</button>
 	<button
 		class="cursor-pointer rounded bg-orange-500 px-3 py-1 text-white transition-colors hover:bg-orange-600"
-		on:click={repairCurrentJSON}
+		onclick={repairCurrentJSON}
 		title="Repair JSON"
 	>
 		Repair
 	</button>
 	<button
 		class="cursor-pointer rounded bg-purple-500 px-3 py-1 text-white transition-colors hover:bg-purple-600"
-		on:click={beautify}
+		onclick={beautify}
 		title="Format JSON"
 	>
 		Format

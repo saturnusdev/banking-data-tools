@@ -1,22 +1,23 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
     import Icon from "@iconify/svelte";
-	import SafeIcon from '$lib/SafeIcon.svelte';
-    import Toolbar from '$lib/components/editor/Toolbar.svelte';
-    import JsonTree from '$lib/components/editor/JsonTree.svelte';
-    import DiffPanel from '$lib/components/editor/DiffPanel.svelte';
+	import SafeIcon from '#lib/SafeIcon.svelte';
+    import Toolbar from '#lib/components/editor/Toolbar.svelte';
+    import JsonTree from '#lib/components/editor/JsonTree.svelte';
+    import DiffPanel from '#lib/components/editor/DiffPanel.svelte';
+    import JsonToolTabs from '#lib/components/json-tools/JsonToolTabs.svelte';
 
-    import { createJsonEditor } from '$lib/plugin/monaco/monaco';
-    import { buildTree, type TreeNode } from '$lib/json/tree';
-    import { parseJsonInWorker } from '$lib/json/worker';
-	import { page } from '$app/stores';
+    import { createJsonEditor } from '#lib/plugin/monaco/monaco';
+    import { buildTree, type TreeNode } from '#lib/json/tree';
+    import { parseJsonInWorker } from '#lib/json/worker';
+	import { page } from '$app/state';
 
 	// Page-specific SEO metadata
 	const pageSeo = $derived({
 		title: 'JSON Tools - Advanced JSON Editor with Tree View | Banking Data Tools',
-		description: 'Professional JSON editor with real-time validation, auto-repair, tree view, and diff capabilities. Format, validate, and repair JSON files with ease.',
-		keywords: 'JSON editor, JSON validator, JSON formatter, JSON repair, JSON tree view, JSON diff, JSON tools, online JSON editor',
-		url: `https://www.banking-tools.java-sc.com${$page.url.pathname}`,
+		description: 'Professional JSON toolset with real-time validation, auto-repair, tree view, diff, JSONPath query, YAML/CSV/XML conversion, schema generation, and mock data generation.',
+		keywords: 'JSON editor, JSON validator, JSON formatter, JSON repair, JSON tree view, JSON diff, JSON to YAML, JSON to CSV, JSON to XML, JSONPath, JSON schema generator, mock data generator, JSON minify, JSON tools, online JSON tools',
+		url: `https://www.banking-tools.java-sc.com${page.url.pathname}`,
 		type: 'website'
 	});
 
@@ -125,7 +126,7 @@
 								JSON Tools
 							</h1>
 							<p class="text-gray-600 mt-1">
-								Advanced JSON editor with tree view and diff capabilities
+								Advanced JSON editor with formatter, validator, converter, JSONPath, schema, and diff tools
 							</p>
 						</div>
 					</div>
@@ -136,62 +137,7 @@
 
 	<!-- Main Content -->
 	<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-		<!-- JSON Editor Section -->
-		<section class="bg-white rounded-2xl shadow-xl border border-green-100 overflow-hidden">
-			<div class="bg-gradient-to-r from-green-500 to-emerald-500 p-6">
-				<div class="flex items-center justify-between">
-					<div class="flex items-center space-x-3">
-						<SafeIcon iconName="mdi-light:code-braces" customClass="h-6 w-6 text-white" />
-						<h2 class="text-xl font-bold text-white">JSON Editor</h2>
-					</div>
-				</div>
-			</div>
-			<div class="flex flex-col bg-gray-50 border border-gray-200 rounded-lg" style="height: 40rem;">
-				<div class="bg-white border-b border-gray-200 p-3">
-					<Toolbar
-						{editor}
-						on:toggleTree={() => (showTree = !showTree)}
-						on:showDiff={(e) => (diffData = e.detail)}
-						on:showSuccess={(e) => {
-							success = e.detail;
-							error = '';
-							setTimeout(() => { success = ''; }, 5000);
-						}}
-						on:showError={(e) => {
-							error = e.detail;
-							success = '';
-							setTimeout(() => { error = ''; }, 5000);
-						}}
-						on:contentChanged={() => {
-							// Trigger the editor's change event to update the tree
-							editor.getModel().setValue(editor.getValue());
-						}}
-					/>
-				</div>
-		
-				<div class="flex flex-1 overflow-hidden bg-white">
-					{#if showTree}
-						<div class="w-64 border-r border-gray-200 bg-gray-50">
-							<JsonTree {tree} on:select={(e) => reveal(e.detail)} />
-						</div>
-					{/if}
-		
-					<div bind:this={editorEl} class="flex-1 bg-white"></div>
-				</div>
-		
-				{#if diffData}
-					<DiffPanel {diffData} on:close={() => (diffData = null)} />
-				{/if}
-		
-				{#if error}
-					<div class="bg-red-50 border-l-4 border-red-400 p-3 text-red-800">
-						<div class="flex items-center space-x-2">
-							<SafeIcon iconName="mdi-light:alert" customClass="h-5 w-5" />
-							<span class="text-sm">{error}</span>
-						</div>
-					</div>
-				{/if}
-			</div>
-		</section>
+		<!-- More JSON Tools (Formatter, Validator, Converter, Query, Schema, Mock, Paginate, Clean) -->
+		<JsonToolTabs />
 	</div>
 </main>

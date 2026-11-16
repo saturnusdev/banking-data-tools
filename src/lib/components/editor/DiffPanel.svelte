@@ -1,11 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { createDiffEditor } from '$lib/plugin/monaco/diff';
-	import { createEventDispatcher } from 'svelte';
+	import { createDiffEditor } from '#lib/plugin/monaco/diff';
 
-	export let diffData;
+	let { diffData, onclose } = $props();
 	let el: HTMLDivElement;
-	const dispatch = createEventDispatcher();
 
 	onMount(() => {
 		createDiffEditor(el, diffData.original, diffData.modified);
@@ -16,7 +14,7 @@
 	<div class="absolute inset-10 bg-gray-900">
 		<div class="flex justify-between bg-gray-800 p-2">
 			<span>Diff View</span>
-			<button class="cursor-pointer" on:click={() => dispatch('close')}>Close</button>
+			<button class="cursor-pointer" onclick={onclose}>Close</button>
 		</div>
 		<div bind:this={el} class="h-full"></div>
 	</div>

@@ -2,10 +2,9 @@
 <script>
 	import Icon from '@iconify/svelte';
 	
-	export let iconName = '';
-	export let customClass = '';
+	let { iconName = '', customClass = '', children } = $props();
 	
-	let hasError = false;
+	let hasError = $state(false);
 	
 	// Handle icon loading errors
 	function handleIconError() {
@@ -13,19 +12,21 @@
 		console.warn('Icon failed to load, using fallback');
 	}
 	
-	$: safeClass = `${customClass} ${hasError ? 'opacity-50' : ''}`;
+	let safeClass = $derived(`${customClass} ${hasError ? 'opacity-50' : ''}`);
 </script>
 
 {#if hasError}
 	<!-- Fallback emoji when icon fails -->
 	<div class={safeClass}>
-		<slot>
+		{#if children}
+			{@render children()}
+		{:else}
 			<span class="inline-block">⚙️</span>
-		</slot>
+		{/if}
 	</div>
 {:else}
 	<!-- Try to load icon -->
 	<div class={safeClass}>
-		<Icon icon={iconName} class={customClass} on:error={handleIconError} />
+		<Icon icon={iconName} class={customClass} onerror={handleIconError} />
 	</div>
 {/if}

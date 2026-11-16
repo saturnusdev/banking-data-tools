@@ -1,7 +1,7 @@
 <script>
 	import { goto } from '$app/navigation';
-	import SafeIcon from '$lib/SafeIcon.svelte';
-	import { loadYAML } from '$lib/lazy-loads';
+	import SafeIcon from '#lib/SafeIcon.svelte';
+	import { loadYAML } from '#lib/lazy-loads';
 
 	let yamlText = '';
 	let jsonText = '';
@@ -92,7 +92,7 @@
 				<div class="flex items-center space-x-4">
 					<button
 						class="group rounded-full p-2 text-green-600 transition-all hover:bg-green-100 hover:scale-110"
-						on:click={() => goto('/')}
+						onclick={() => goto('/')}
 					>
 						<SafeIcon iconName="mdi-light:arrow-left" customClass="h-6 w-6 transition-transform group-hover:-translate-x-1" />
 					</button>
@@ -129,7 +129,7 @@
 				<div class="flex justify-center">
 					<div class="inline-flex rounded-xl bg-gray-100 p-1">
 						<button
-							on:click={() => mode = 'yaml-to-json'}
+							onclick={() => mode = 'yaml-to-json'}
 							class="rounded-lg px-6 py-3 text-sm font-medium transition-all {mode === 'yaml-to-json'
 								? 'bg-white text-green-600 shadow-md'
 								: 'text-gray-600 hover:text-gray-800'}"
@@ -140,7 +140,7 @@
 							</span>
 						</button>
 						<button
-							on:click={() => mode = 'json-to-yaml'}
+							onclick={() => mode = 'json-to-yaml'}
 							class="rounded-lg px-6 py-3 text-sm font-medium transition-all {mode === 'json-to-yaml'
 								? 'bg-white text-green-600 shadow-md'
 								: 'text-gray-600 hover:text-gray-800'}"
@@ -166,7 +166,7 @@
 						</h2>
 					</div>
 					<button
-						on:click={convert}
+						onclick={convert}
 						class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 					>
 						<span class="relative z-10 flex items-center space-x-2">
@@ -231,7 +231,7 @@
 				
 				<div class="flex justify-center space-x-4">
 					<button
-						on:click={copyToClipboard}
+						onclick={copyToClipboard}
 						class="group relative overflow-hidden rounded-lg bg-green-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-green-600"
 					>
 						<span class="relative z-10 flex items-center space-x-2">
@@ -240,7 +240,7 @@
 						</span>
 					</button>
 					<button
-						on:click={clearAll}
+						onclick={clearAll}
 						class="group relative overflow-hidden rounded-lg bg-gray-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-gray-600"
 					>
 						<span class="relative z-10 flex items-center space-x-2">

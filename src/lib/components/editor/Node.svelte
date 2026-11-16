@@ -1,14 +1,11 @@
 <script lang="ts">
-	import type { TreeNode } from '$lib/json/tree';
-	import { createEventDispatcher } from 'svelte';
+	import type { TreeNode } from '#lib/json/tree';
+	import Node from './Node.svelte';
 
-	export let node: TreeNode;
-	export let expanded: Set<string>;
+	let { node, expanded, onselect } = $props();
 
-	const dispatch = createEventDispatcher<{ select: string }>();
-
-	$: isOpen = expanded?.has(node.id) ?? false;
-	$: hasChildren = !!node.children?.length;
+	let isOpen = $derived(expanded?.has(node.id) ?? false);
+	let hasChildren = $derived(!!node.children?.length);
 
 	function toggle() {
 		if (!hasChildren) return;
@@ -18,8 +15,6 @@
 		} else {
 			expanded.add(node.id);
 		}
-
-		expanded = new Set(expanded);
 	}
 
 	function typeColor(type: string) {
@@ -42,7 +37,7 @@
 				type="button"
 				class="w-4 text-center text-black focus:outline-none"
 				aria-label={isOpen ? 'Collapse node' : 'Expand node'}
-				on:click={toggle}
+				onclick={toggle}
 			>
 				{isOpen ? '▾' : '▸'}
 			</button>
@@ -54,7 +49,7 @@
 		<button
 			type="button"
 			class="flex items-center gap-2 text-left focus:outline-none"
-			on:click={() => dispatch('select', node.path)}
+			onclick={() => onselect?.(node.path)}
 		>
 			<span class="text-black">{node.key}</span>
 			<span class={`text-xs ${typeColor(node.type)}`}>
@@ -66,7 +61,7 @@
 	{#if isOpen && hasChildren}
 		<div class="ml-4">
 			{#each node.children as child}
-				<svelte:self node={child} {expanded} on:select={(e) => dispatch('select', e.detail)} />
+				<Node node={child} {expanded} onselect={onselect} />
 			{/each}
 		</div>
 	{/if}

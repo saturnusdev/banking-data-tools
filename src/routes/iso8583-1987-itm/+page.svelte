@@ -384,7 +384,7 @@
 				<div class="flex items-center space-x-4">
 					<button
 						class="group rounded-full p-2 text-purple-600 transition-all hover:bg-purple-100 hover:scale-110"
-						on:click={() => {
+						onclick={() => {
 							location.href = '/';
 						}}
 					>
@@ -420,7 +420,7 @@
 					</div>
 					<div class="flex space-x-3">
 						<button
-							on:click={parseIsoMessage}
+							onclick={parseIsoMessage}
 							disabled={isProcessing}
 							class="group relative overflow-hidden rounded-lg bg-gradient-to-r from-indigo-500 to-purple-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:from-indigo-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
 						>
@@ -435,7 +435,7 @@
 							</span>
 						</button>
 						<button
-							on:click={clearAll}
+							onclick={clearAll}
 							class="group relative overflow-hidden rounded-lg bg-gradient-to-r from-red-500 to-rose-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:from-red-600 hover:to-rose-600 shadow-lg hover:shadow-xl"
 						>
 							<span class="relative z-10 flex items-center space-x-2">
@@ -487,13 +487,13 @@
 						</div>
 						<div class="flex space-x-3">
 							<button
-								on:click={toggleHexView}
+								onclick={toggleHexView}
 								class="rounded-lg bg-white/20 px-4 py-2 text-sm text-white backdrop-blur-sm transition-all hover:bg-white/30"
 							>
 								{showHexView ? 'Show Parsed' : 'Show Hex'}
 							</button>
 							<button
-								on:click={copyToClipboard}
+								onclick={copyToClipboard}
 								class="rounded-lg bg-white/20 px-4 py-2 text-sm text-white backdrop-blur-sm transition-all hover:bg-white/30"
 							>
 								<Icon icon="mdi-light:content-copy" class="h-4 w-4 mr-1" />

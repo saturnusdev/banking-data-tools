@@ -1,12 +1,12 @@
 <!-- <script lang="ts">
 	import { onMount } from 'svelte';
-	import { createJsonEditor } from '$lib/plugin/monaco/monaco';
-	import { beautifyJson } from '$lib/json/beautify';
-	import { validateJson } from '$lib/json/validate';
-	import { filterByKey } from '$lib/json/filter';
-	import { mapByKey } from '$lib/json/map';
-    import { buildTree } from '$lib/json/tree';
-    import { parseJsonInWorker } from '$lib/json/worker';
+	import { createJsonEditor } from '#lib/plugin/monaco/monaco';
+	import { beautifyJson } from '#lib/json/beautify';
+	import { validateJson } from '#lib/json/validate';
+	import { filterByKey } from '#lib/json/filter';
+	import { mapByKey } from '#lib/json/map';
+    import { buildTree } from '#lib/json/tree';
+    import { parseJsonInWorker } from '#lib/json/worker';
 
     import Toolbar from './Toolbar.svelte';
     import JsonTree from './JsonTree.svelte';
@@ -93,20 +93,20 @@
 	<div class="flex gap-2 bg-gray-800 p-3">
 		<button
 			class="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700"
-			on:click={beautify} disabled={!editor}>Beautify</button
+			onclick={beautify} disabled={!editor}>Beautify</button
 		>
 
 		<input class="input" placeholder="Filter key" bind:value={filterKey} />
 		<input class="input" placeholder="Value (optional)" bind:value={filterValue} />
 		<button
 			class="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700"
-			on:click={filterJson}>Filter</button
+			onclick={filterJson}>Filter</button
 		>
 
 		<input class="input" placeholder="Map key" bind:value={mapKey} />
 		<button
 			class="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700"
-			on:click={mapJson}>Map</button
+			onclick={mapJson}>Map</button
 		>
 	</div>
 

@@ -1,8 +1,7 @@
 <script>
 	import { goto } from '$app/navigation';
-	import Card from '$lib/components/Card.svelte';
-	import SafeIcon from '$lib/SafeIcon.svelte';
-	import { performanceMonitor } from '$lib/performance';
+	import SafeIcon from '#lib/SafeIcon.svelte';
+	import { performanceMonitor } from '#lib/performance';
 	import { onMount } from 'svelte';
 
 	// Monitor page load performance
@@ -99,6 +98,14 @@
 			icon: 'mdi:file-code',
 			color: 'from-green-500 to-emerald-500',
             link: '/yaml-to-json'
+		},
+		{
+			id: 12,
+			title: 'ABCS Converter',
+			description: 'Convert ABCS binary segments to JSON using a DFDL XSD schema',
+			icon: 'mdi:file-document-edit-outline',
+			color: 'from-indigo-500 to-cyan-500',
+            link: '/abcs-converter'
 		}
 	];
 
@@ -131,7 +138,7 @@
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<div 
 					class="group relative bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-2xl hover:scale-105 cursor-pointer"
-					on:click={() => handleCardClick(product)}
+					onclick={() => handleCardClick(product)}
 				>
 					<!-- Gradient Header -->
 					<div class="bg-gradient-to-r {product.color} p-6 relative overflow-hidden">

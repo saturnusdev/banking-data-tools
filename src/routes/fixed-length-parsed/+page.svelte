@@ -1,21 +1,23 @@
 <script>
 	import Icon from "@iconify/svelte";
 
-	let fixedText = '';
-	let fields = [];
-	let parsedData = [];
-	let error = '';
-	let xsdInput = '';
-	let showXsdInput = false;
+	let fixedText = $state('');
+	let fields = $state([]);
+	let parsedData = $state([]);
+	let error = $state('');
+	let xsdInput = $state('');
+	let showXsdInput = $state(false);
 
 	// Reactive: auto-parse when fields or fixedText changes (after initial parse)
 	// But only if we have data and fields
-	$: if (autoParseEnabled && fixedText.trim() && fields.length > 0) {
-		autoParse();
-	}
+	$effect(() => {
+		if (autoParseEnabled && fixedText.trim() && fields.length > 0) {
+			autoParse();
+		}
+	});
 
 	// Flag to enable reactive parsing AFTER first manual parse
-	let autoParseEnabled = false;
+	let autoParseEnabled = $state(false);
 
 	function addField() {
 		fields = [...fields, { name: '', length: 10 }];
@@ -229,7 +231,7 @@
 				<div class="flex items-center space-x-4">
 					<button
 						class="group rounded-full p-2 text-purple-600 transition-all hover:bg-purple-100 hover:scale-110"
-						on:click={() => {location.href = "/"}}
+						onclick={() => {location.href = "/"}}
 					>
 						<Icon icon="mdi-light:arrow-left" class="h-6 w-6 transition-transform group-hover:-translate-x-1" />
 					</button>
@@ -294,7 +296,7 @@
 					</div>
 					<div class="flex space-x-3">
 						<button
-							on:click={autoDetectFields}
+							onclick={autoDetectFields}
 							class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 						>
 							<span class="relative z-10 flex items-center space-x-2">
@@ -303,7 +305,7 @@
 							</span>
 						</button>
 						<button
-							on:click={() => showXsdInput = !showXsdInput}
+							onclick={() => showXsdInput = !showXsdInput}
 							class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 						>
 							<span class="relative z-10 flex items-center space-x-2">
@@ -312,7 +314,7 @@
 							</span>
 						</button>
 						<button
-							on:click={addField}
+							onclick={addField}
 							class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 						>
 							<span class="relative z-10 flex items-center space-x-2">
@@ -332,7 +334,7 @@
 								<p class="text-sm font-medium text-purple-800">Paste XSD Standard</p>
 							</div>
 							<button
-								on:click={() => showXsdInput = false}
+								onclick={() => showXsdInput = false}
 								class="text-purple-600 hover:text-purple-800 transition-colors"
 							>
 								<Icon icon="mdi-light:close" class="h-5 w-5" />
@@ -344,7 +346,7 @@
 							class="w-full h-32 rounded-lg border-2 border-purple-200 p-3 font-mono text-xs transition-all focus:border-purple-400 focus:ring-2 focus:ring-purple-100 resize-none"
 						></textarea>
 						<button
-							on:click={extractFromXsd}
+							onclick={extractFromXsd}
 							class="w-full rounded-lg bg-gradient-to-r from-purple-500 to-indigo-500 px-4 py-2 text-sm font-semibold text-white transition-all hover:from-purple-600 hover:to-indigo-600"
 						>
 							Extract Fields
@@ -358,18 +360,18 @@
 								type="text"
 								placeholder="Field name"
 								value={field.name}
-								on:input={(e) => updateField(i, 'name', e.target.value)}
+								oninput={(e) => updateField(i, 'name', e.target.value)}
 								class="flex-1 rounded-xl border-2 border-gray-200 p-3 text-sm transition-all focus:border-purple-400 focus:ring-4 focus:ring-purple-100"
 							/>
 							<input
 								type="number"
 								min="1"
 								value={field.length}
-								on:input={(e) => updateField(i, 'length', e.target.value)}
+								oninput={(e) => updateField(i, 'length', e.target.value)}
 								class="w-32 rounded-xl border-2 border-gray-200 p-3 text-sm transition-all focus:border-purple-400 focus:ring-4 focus:ring-purple-100"
 							/>
 							<button
-								on:click={() => removeField(i)}
+								onclick={() => removeField(i)}
 								class="group rounded-xl bg-gradient-to-r from-red-500 to-rose-500 p-3 text-white transition-all hover:from-red-600 hover:to-rose-600 hover:scale-105"
 							>
 								<Icon icon="mdi-light:delete" class="h-4 w-4" />
@@ -391,7 +393,7 @@
 		<!-- Action Buttons -->
 		<div class="flex flex-wrap gap-4">
 			<button
-				on:click={parseText}
+				onclick={parseText}
 				class="group relative overflow-hidden rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 px-8 py-3 text-sm font-semibold text-white transition-all hover:from-green-600 hover:to-emerald-600 shadow-lg hover:shadow-xl"
 			>
 				<span class="relative z-10 flex items-center space-x-2">
@@ -402,7 +404,7 @@
 
 			{#if parsedData.length > 0}
 				<button
-					on:click={exportJSON}
+					onclick={exportJSON}
 					class="group relative overflow-hidden rounded-lg bg-gradient-to-r from-indigo-500 to-purple-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:from-indigo-600 hover:to-purple-600 shadow-lg hover:shadow-xl"
 				>
 					<span class="relative z-10 flex items-center space-x-2">
@@ -411,7 +413,7 @@
 					</span>
 				</button>
 				<button
-					on:click={exportCSV}
+					onclick={exportCSV}
 					class="group relative overflow-hidden rounded-lg bg-gradient-to-r from-teal-500 to-cyan-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:from-teal-600 hover:to-cyan-600 shadow-lg hover:shadow-xl"
 				>
 					<span class="relative z-10 flex items-center space-x-2">

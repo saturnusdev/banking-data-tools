@@ -1,6 +1,6 @@
 <script>
 	import Icon from '@iconify/svelte';
-	import { loadTerser, loadPrettier } from '$lib/lazy-loads';
+	import { loadTerser, loadPrettier } from '#lib/lazy-loads';
 
 	// Lazy loaded dependencies
 	let minify = null;
@@ -197,7 +197,7 @@
 				<div class="flex items-center space-x-4">
 					<button
 						class="group rounded-full p-2 text-purple-600 transition-all hover:bg-purple-100 hover:scale-110"
-						on:click={() => {
+						onclick={() => {
 							location.href = '/';
 						}}
 					>
@@ -238,7 +238,7 @@
 				<div class="flex justify-center">
 					<div class="inline-flex rounded-xl bg-gray-100 p-1">
 						<button
-							on:click={() => (mode = 'original')}
+							onclick={() => (mode = 'original')}
 							class="rounded-lg px-6 py-3 text-sm font-medium transition-all {mode === 'original'
 								? 'bg-white text-yellow-600 shadow-md'
 								: 'text-gray-600 hover:text-gray-800'}"
@@ -249,7 +249,7 @@
 							</span>
 						</button>
 						<button
-							on:click={() => (mode = 'minified')}
+							onclick={() => (mode = 'minified')}
 							class="rounded-lg px-6 py-3 text-sm font-medium transition-all {mode === 'minified'
 								? 'bg-white text-yellow-600 shadow-md'
 								: 'text-gray-600 hover:text-gray-800'}"
@@ -260,7 +260,7 @@
 							</span>
 						</button>
 						<button
-							on:click={() => (mode = 'unminified')}
+							onclick={() => (mode = 'unminified')}
 							class="rounded-lg px-6 py-3 text-sm font-medium transition-all {mode === 'unminified'
 								? 'bg-white text-yellow-600 shadow-md'
 								: 'text-gray-600 hover:text-gray-800'}"
@@ -339,7 +339,7 @@
 					<div class="flex space-x-3">
 						{#if mode === 'original'}
 							<button
-								on:click={minifyJs}
+								onclick={minifyJs}
 								class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 							>
 								<span class="relative z-10 flex items-center space-x-2">
@@ -349,7 +349,7 @@
 							</button>
 						{:else if mode === 'minified'}
 							<button
-								on:click={unminifyJs}
+								onclick={unminifyJs}
 								class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 							>
 								<span class="relative z-10 flex items-center space-x-2">
@@ -359,7 +359,7 @@
 							</button>
 						{/if}
 						<button
-							on:click={cleanCode}
+							onclick={cleanCode}
 							class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 						>
 							<span class="relative z-10 flex items-center space-x-2">
@@ -368,7 +368,7 @@
 							</span>
 						</button>
 						<button
-							on:click={copyToClipboard}
+							onclick={copyToClipboard}
 							class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 						>
 							<span class="relative z-10 flex items-center space-x-2">
@@ -377,7 +377,7 @@
 							</span>
 						</button>
 						<button
-							on:click={clearAll}
+							onclick={clearAll}
 							class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
 						>
 							<span class="relative z-10 flex items-center space-x-2">

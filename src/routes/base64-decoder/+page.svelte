@@ -11,7 +11,7 @@
 		extractJsonData,
 		remapJsonStructure,
 		isHexValue
-	} from '$lib/base64-processor.js';
+	} from '#lib/base64-processor.js';
 
 	let inputText = '';
 	let decodedOutput = '';
@@ -221,7 +221,7 @@
 				<div class="flex items-center space-x-4">
 					<button
 						class="group rounded-full p-2 text-purple-600 transition-all hover:bg-purple-100 hover:scale-110"
-						on:click={() => {
+						onclick={() => {
 							location.href = '/';
 						}}
 					>
@@ -287,7 +287,7 @@
 				></textarea>
 				<div class="flex flex-wrap gap-3">
 					<button
-						on:click={detectAndDecode}
+						onclick={detectAndDecode}
 						disabled={isProcessing}
 						class="group relative overflow-hidden rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
 					>
@@ -303,7 +303,7 @@
 					</button>
 					{#if selectedType === 'plaintext'}
 						<button
-							on:click={encodeToBase64}
+							onclick={encodeToBase64}
 							disabled={isProcessing}
 							class="group relative overflow-hidden rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:from-green-600 hover:to-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
 						>
@@ -314,7 +314,7 @@
 						</button>
 					{/if}
 					<button
-						on:click={clearAll}
+						onclick={clearAll}
 						class="group relative overflow-hidden rounded-lg bg-gradient-to-r from-red-500 to-rose-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:from-red-600 hover:to-rose-600 shadow-lg hover:shadow-xl"
 					>
 						<span class="relative z-10 flex items-center space-x-2">
@@ -360,13 +360,13 @@
 						</div>
 						<div class="flex space-x-3">
 							<button
-								on:click={toggleRawOutput}
+								onclick={toggleRawOutput}
 								class="rounded-lg bg-white/20 px-4 py-2 text-sm text-white backdrop-blur-sm transition-all hover:bg-white/30"
 							>
 								{showRawOutput ? 'Show Formatted' : 'Show Raw'}
 							</button>
 							<button
-								on:click={copyToClipboard}
+								onclick={copyToClipboard}
 								class="rounded-lg bg-white/20 px-4 py-2 text-sm text-white backdrop-blur-sm transition-all hover:bg-white/30"
 							>
 								<Icon icon="mdi-light:content-copy" class="h-4 w-4 mr-1" />
@@ -408,7 +408,7 @@
 							</h2>
 						</div>
 						<button
-							on:click={copyRemappedToClipboard}
+							onclick={copyRemappedToClipboard}
 							class="rounded-lg bg-white/20 px-4 py-2 text-sm text-white backdrop-blur-sm transition-all hover:bg-white/30"
 						>
 							<Icon icon="mdi-light:content-copy" class="h-4 w-4 mr-1" />
