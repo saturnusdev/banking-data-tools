@@ -66,10 +66,4 @@
 		<changefreq>monthly</changefreq>
 		<priority>0.7</priority>
 	</url>
-	<url>
-		<loc>https://www.banking-tools.java-sc.com/iso8583-1987-itm</loc>
-		<lastmod>2026-05-12</lastmod>
-		<changefreq>monthly</changefreq>
-		<priority>0.7</priority>
-	</url>
 </urlset>

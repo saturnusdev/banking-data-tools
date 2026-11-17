@@ -8,8 +8,9 @@
 	import { paginateArray } from '#lib/json/paginate';
 	import SafeIcon from '#lib/SafeIcon.svelte';
 	import MonacoField from './MonacoField.svelte';
+	import GitHubDiff from './GitHubDiff.svelte';
 
-	type Tab = 'convert' | 'minify' | 'query' | 'schema' | 'mock' | 'paginate' | 'clean';
+	type Tab = 'convert' | 'minify' | 'query' | 'schema' | 'mock' | 'paginate' | 'clean' | 'compare';
 
 	const tabs: { id: Tab; label: string; icon: string }[] = [
 		{ id: 'convert', label: 'Convert', icon: 'mdi:swap-horizontal' },
@@ -18,7 +19,8 @@
 		{ id: 'schema', label: 'Schema', icon: 'mdi:file-code-outline' },
 		{ id: 'mock', label: 'Mock', icon: 'mdi:auto-fix' },
 		{ id: 'paginate', label: 'Paginate', icon: 'mdi:page-next' },
-		{ id: 'clean', label: 'Clean', icon: 'mdi:broom' }
+		{ id: 'clean', label: 'Clean', icon: 'mdi:broom' },
+		{ id: 'compare', label: 'Compare', icon: 'mdi:compare' }
 	];
 
 	let activeTab = $state<Tab>('convert');
@@ -60,6 +62,12 @@
 		dedupeArrays: false,
 		trimStrings: false
 	});
+
+	// Compare
+	let compareOriginal = $state('{\n  "name": "Alice",\n  "role": "admin",\n  "active": true\n}');
+	let compareModified = $state('{\n  "name": "Alice",\n  "role": "viewer",\n  "active": true,\n  "lastLogin": "2024-01-15"\n}');
+	let compareDiffOriginal = $state('');
+	let compareDiffModified = $state('');
 
 	let meta = $state('');
 
@@ -164,6 +172,43 @@
 		}
 	}
 
+	// Recursively sort object keys so key order / whitespace don't show up as diffs.
+	function sortKeysDeep(value: any): any {
+		if (Array.isArray(value)) return value.map(sortKeysDeep);
+		if (value && typeof value === 'object') {
+			const sorted: any = {};
+			for (const key of Object.keys(value).sort()) {
+				sorted[key] = sortKeysDeep(value[key]);
+			}
+			return sorted;
+		}
+		return value;
+	}
+
+	function runCompare() {
+		try {
+			const a = JSON.parse(compareOriginal);
+			const b = JSON.parse(compareModified);
+			compareDiffOriginal = JSON.stringify(sortKeysDeep(a), null, 2);
+			compareDiffModified = JSON.stringify(sortKeysDeep(b), null, 2);
+			output = '';
+			error = '';
+			meta = 'Comparison complete — GitHub-style diff (green = added, red = removed).';
+		} catch (e: any) {
+			compareDiffOriginal = '';
+			compareDiffModified = '';
+			setErr(e.message || String(e));
+		}
+	}
+
+	function swapCompare() {
+		const t = compareOriginal;
+		compareOriginal = compareModified;
+		compareModified = t;
+		compareDiffOriginal = '';
+		compareDiffModified = '';
+	}
+
 	function selectTab(id: Tab) {
 		activeTab = id;
 		clearOutput();
@@ -177,6 +222,7 @@
 		else if (activeTab === 'mock') runMock();
 		else if (activeTab === 'paginate') runPaginate();
 		else if (activeTab === 'clean') runClean();
+		else if (activeTab === 'compare') runCompare();
 	}
 
 	function clearOutput() {
@@ -201,7 +247,7 @@
 
 	// Alt+1..7 switches feature, Ctrl/Cmd+Enter runs the active feature.
 	function onGlobalKey(e: KeyboardEvent) {
-		if (e.altKey && !e.ctrlKey && !e.metaKey && /^[1-7]$/.test(e.key)) {
+		if (e.altKey && !e.ctrlKey && !e.metaKey && /^[1-8]$/.test(e.key)) {
 			const n = Number(e.key);
 			if (n >= 1 && n <= tabs.length) {
 				e.preventDefault();
@@ -370,6 +416,33 @@
 					<label><input type="checkbox" bind:checked={cleanOpts.trimStrings} /> Trim strings</label>
 				</div>
 				<MonacoField bind:value={cleanInput} language="json" height="14rem" />
+			{:else if activeTab === 'compare'}
+				<div class="mb-2 flex gap-2">
+					<button
+						type="button"
+						onclick={runCompare}
+						class="flex items-center gap-1 px-3 py-1 text-sm rounded bg-emerald-500 text-white hover:bg-emerald-600"
+					>
+						<SafeIcon iconName="mdi:compare" customClass="h-4 w-4" />
+						Compare
+					</button>
+					<button
+						type="button"
+						onclick={swapCompare}
+						class="flex items-center gap-1 px-3 py-1 text-sm rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
+					>
+						<SafeIcon iconName="mdi:swap-horizontal" customClass="h-4 w-4" />
+						Swap
+					</button>
+				</div>
+				<div class="mb-3">
+					<div class="mb-1 text-sm font-medium text-gray-600">Original JSON</div>
+					<MonacoField bind:value={compareOriginal} language="json" height="10rem" />
+				</div>
+				<div>
+					<div class="mb-1 text-sm font-medium text-gray-600">Modified JSON</div>
+					<MonacoField bind:value={compareModified} language="json" height="10rem" />
+				</div>
 {/if}
 		</div>
 
@@ -377,7 +450,11 @@
 			<div class="mb-2">
 				<span class="text-sm font-medium text-gray-600">Output</span>
 			</div>
-			<MonacoField value={output} readonly language={outputLang} height="20rem" />
+			{#if activeTab === 'compare'}
+				<GitHubDiff oldText={compareDiffOriginal} newText={compareDiffModified} />
+			{:else}
+				<MonacoField value={output} readonly language={outputLang} height="20rem" />
+			{/if}
 			{#if meta}
 				<div class="text-xs text-gray-500 mt-1">{meta}</div>
 			{/if}

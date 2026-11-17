@@ -7,16 +7,25 @@
 		parseAbcsBinary,
 		parseAbcsSegments,
 		flattenWithSchema,
+		findRecordMarkers,
+		mergeSchemas,
+		findHeaderRootsForSchema,
+		extractHeaderLengths,
+		findFieldValue,
+		detectTextEncoding,
 		hexToBytes,
 		base64ToBytes
 	} from '#lib/plugin/abcs/abcsParser.js';
 
 	// Form state
 	let schemaFile = null;
-	let schemaText = '';
+	let schemaText = ''; // primary/active schema text (for the dropdown display & single-schema mode)
+	let schemaTexts = []; // all active schema texts (header + body can be merged)
 	let rootElement = ''; // default empty; auto-populated from the schema's DFDL roots
-	let availableRoots = []; // top-level elements detected in the loaded schema
+	let availableRoots = []; // top-level elements detected in the loaded schema(s)
 	let schemaNotice = ''; // info message about stored/uploaded schema
+	let messageDirection = 'auto'; // 'auto' | 'request' | 'response'
+	let mapABCSHeader = true; // also map the ABCSHeader (ICLEN) after the DSP header
 	let binaryFile = null;
 	let binaryFileName = '';
 	let binaryFileSize = 0;
@@ -27,16 +36,24 @@
 	let byteOrder = 'bigEndian';
 	let stripPad = true;
 	let showDebug = true;
+	let byteOffset = 0; // start parsing at this byte offset (e.g. inside a multi-record message)
 
 	// Result state
 	let results = null;
 	let loading = false;
 	let error = '';
+	let parseWarning = '';
+	let detectedMarkers = [];
 	let flatFields = [];
+
+	// Mode helpers (a header-mapped result is still a segments/single result underneath)
+	$: isSegmentsMode = !!results && (results['mode'] === 'segments' || results['mode'] === 'header+segments');
+	$: isSingleMode = !!results && (results['mode'] === 'single' || results['mode'] === 'header+single');
 
 	// Stored schema files (localStorage)
 	let storedFiles = [];
 	let selectedStoredFile = '';
+	let mergeSelection = []; // stored file names selected for merging (header + body schemas)
 
 	onMount(() => {
 		loadStoredFiles();
@@ -74,11 +91,24 @@
 		return fileInfo;
 	}
 
-	// Extract available root elements (top-level xs:element) from the schema
-	function updateAvailableRoots(content) {
+	// Extract available root elements (top-level xs:element) from all active schemas
+	function updateAvailableRoots() {
 		try {
-			const schema = parseAbcsSchema(content);
-			availableRoots = Object.keys(schema.rootTypes);
+			const texts = schemaTexts.length ? schemaTexts : schemaText ? [schemaText] : [];
+			const schemas = texts.map(t => parseAbcsSchema(t));
+			const merged = mergeSchemas(schemas);
+			// List top-level roots and any nested elements as selectable body roots,
+			// but EXCLUDE the header roots (DSPHeader/ABCSHeader and their Response
+			// variants) — they are auto-mapped from the first character, so they must
+			// not appear in the Root Element chooser.
+			availableRoots = [...new Set([...Object.keys(merged.rootTypes || {}), ...Object.keys(merged.elementRegistry || {})])]
+				.filter(r => !/header/i.test(r));
+			// Auto-select the body root when there's an obvious one (its name contains
+			// "Body", e.g. ABCSBody), so the user doesn't have to pick it manually.
+			if (!rootElement.trim()) {
+				const bodyRoot = availableRoots.find(r => /body/i.test(r));
+				if (bodyRoot) rootElement = bodyRoot;
+			}
 		} catch (e) {
 			availableRoots = [];
 		}
@@ -89,9 +119,44 @@
 		const blob = new Blob([content], { type: 'application/xml' });
 		schemaFile = new File([blob], name, { type: 'application/xml' });
 		schemaText = content;
+		schemaTexts = [content];
 		selectedStoredFile = name;
-		updateAvailableRoots(content);
-		rootElement = ''; // default empty; user picks from the auto-populated dropdown
+		rootElement = ''; // default empty; auto-selected below from the schema's DFDL roots
+		updateAvailableRoots();
+	}
+
+	// Merge a set of stored schema files into the active schema set
+	function loadMergedSchemas(names) {
+		const texts = (names || [])
+			.map(n => storedFiles.find(f => f.name === n))
+			.filter(Boolean)
+			.map(f => f.content);
+		if (!texts.length) return;
+		schemaTexts = texts;
+		schemaText = texts[texts.length - 1]; // last file is the "primary" (e.g. the body schema)
+		const lastName = names[names.length - 1];
+		schemaFile = new File([new Blob(texts, { type: 'application/xml' })], `${lastName} (+${texts.length - 1} merged)`, { type: 'application/xml' });
+		selectedStoredFile = lastName;
+		rootElement = '';
+		updateAvailableRoots();
+	}
+
+	// Merge whichever stored schemas are ticked in the "merge" checkbox list
+	function mergeSelectedFiles() {
+		if (!mergeSelection.length) {
+			schemaNotice = 'Select at least one schema to merge.';
+			return;
+		}
+		loadMergedSchemas(mergeSelection);
+		schemaNotice = `Merged ${mergeSelection.length} schema(s): ${mergeSelection.join(', ')}.`;
+		error = '';
+	}
+
+	// Convenience: merge all stored schemas (e.g. ABCS header + DSP header + body)
+	function quickMergeHeaderAndBody() {
+		if (!storedFiles.length) return;
+		mergeSelection = storedFiles.map(f => f.name);
+		mergeSelectedFiles();
 	}
 
 	function selectStoredFile(fileName) {
@@ -109,6 +174,7 @@
 			selectedStoredFile = '';
 			schemaFile = null;
 			schemaText = '';
+			schemaTexts = [];
 			availableRoots = [];
 			rootElement = '';
 			schemaNotice = '';
@@ -177,7 +243,8 @@
 	}
 
 	async function processParsing() {
-		if (!schemaText.trim()) {
+		const texts = schemaTexts.length ? schemaTexts : schemaText ? [schemaText] : [];
+		if (!texts.length) {
 			error = 'Please upload a DFDL/XSD schema file';
 			return;
 		}
@@ -189,28 +256,158 @@
 
 		loading = true;
 		error = '';
+		parseWarning = '';
+		detectedMarkers = [];
 		results = null;
 		flatFields = [];
 
 		try {
-			// 1. Parse the schema
-			const schema = parseAbcsSchema(schemaText);
+			// 1. Merge all active schemas (header + body) into one
+			const schema = mergeSchemas(texts.map(t => parseAbcsSchema(t)));
 
 			// 2. Resolve binary input
 			const bytes = await resolveInputBytes();
 
+			// 3. Apply a user-supplied start offset (e.g. to begin at a record boundary)
+			const offset = Math.max(0, Math.min(Math.floor(Number(byteOffset) || 0), bytes.length));
+			const startBytes = offset > 0 ? bytes.subarray(offset) : bytes;
+
 			const isAllSegments = rootElement.trim() === '__ALL__';
 
+			// 4. Map the header chain (ABCS header → DSP header), then parse the body.
+			let headers = [];
+			let bodyBytes = startBytes;
+
+			// Parse one header root at an offset, reporting its declared length (ICLEN/I13HLEN).
+			const parseOneHeader = (hroot, atOffset) => {
+				const tree = buildSchemaTree(schema, hroot);
+				const parsed = parseAbcsBinary(tree, startBytes.subarray(atOffset), {
+					rootName: hroot,
+					defaultEncoding: defaultEncoding,
+					defaultByteOrder: byteOrder,
+					stripPad: stripPad
+				});
+				const { headerLength } = extractHeaderLengths(parsed.json);
+				const remaining = startBytes.length - atOffset;
+				const declaredSane =
+					headerLength != null && headerLength > 0 && headerLength <= remaining &&
+					headerLength >= parsed.debug.consumedBytes;
+				// The DSP header always starts at the first character and its
+				// I13CNBF.SKTHEAD is expected to be '*SOKR' (len 5). This signature is
+				// used to validate the direction and to auto-detect request vs response.
+				const isDspRoot = /dsp/i.test(hroot) || (!/abcs/i.test(hroot) && /header/i.test(hroot));
+				const sktheadRaw = isDspRoot ? findFieldValue(parsed.json, 'SKTHEAD') : undefined;
+				const skthead = (sktheadRaw && typeof sktheadRaw === 'object')
+					? (sktheadRaw.value ?? sktheadRaw.text)
+					: sktheadRaw;
+				const signatureOk = !isDspRoot || skthead === '*SOKR';
+				return {
+					root: hroot,
+					json: parsed.json,
+					debug: parsed.debug,
+					fields: parsed.fields,
+					declaredLength: headerLength,
+					declaredSane,
+					consumedBytes: parsed.debug.consumedBytes,
+					isDspRoot,
+					skthead,
+					signatureOk,
+					length: 0
+				};
+			};
+
+			// Build the header chain from an ordered list of header roots (DSP layer
+			// first, then the ABCS layer). The DSP layer header is mapped first (it
+			// always starts at the first character; I13CNBF.SKTHEAD = '*SOKR', len 5).
+			// The ABCS layer header (ICLEN) is optional and auto-detected: it is only
+			// mapped when its declared ICLEN is sane, so messages without it are fine.
+			const buildChain = (headerRoots) => {
+				const chain = [];
+				for (const root of headerRoots) {
+					const isAbcsLayer = /abcs/i.test(root);
+					if (isAbcsLayer && !mapABCSHeader) continue;
+					chain.push({ root, auto: isAbcsLayer ? true : (messageDirection === 'auto') });
+				}
+				return chain;
+			};
+
+			const runChain = (headerRoots) => {
+				const chain = buildChain(headerRoots);
+				const mapped = [];
+				let cursor = 0;
+				for (const spec of chain) {
+					const remaining = startBytes.length - cursor;
+					if (remaining <= 0) break;
+					const h = parseOneHeader(spec.root, cursor);
+					// Auto-detected headers (DSP header in Auto mode, and the ABCS header)
+					// are skipped when their declared length is not sane, or when the DSP
+					// header's I13CNBF.SKTHEAD is not '*SOKR' (wrong direction). Manually-
+					// selected DSP headers are always mapped. When a header is skipped we
+					// stop the chain, because subsequent headers would otherwise be parsed
+					// at the same (wrong) offset.
+					if (spec.auto && (!h.declaredSane || (h.isDspRoot && !h.signatureOk))) break;
+					h.length = h.declaredSane ? h.declaredLength : h.consumedBytes;
+					mapped.push(h);
+					cursor += h.length;
+				}
+				return { headers: mapped, bodyBytes: startBytes.subarray(cursor), cursor };
+			};
+
+			if (messageDirection !== 'auto') {
+				const headerRoots = findHeaderRootsForSchema(schema, messageDirection);
+				if (!headerRoots.length) {
+					// Don't hard-fail: parse the whole input as the body, with a soft warning.
+					parseWarning = `No header root was found for the "${messageDirection}" direction. ` +
+						`Expected a DSP header and/or ABCS header root (e.g. DSPHeader/DSPHeaderResponse, ` +
+						`ABCSHeader/ABCSHeaderResponse) in the schema. The whole input was parsed as the body.`;
+				} else {
+					const r = runChain(headerRoots);
+					headers = r.headers;
+					bodyBytes = r.bodyBytes;
+					const dsp = headers.find(h => h.isDspRoot);
+					if (dsp && !dsp.signatureOk) {
+						parseWarning = `Mapped DSP header "${dsp.root}" but its I13CNBF.SKTHEAD is ` +
+							`"${dsp.skthead}" (expected "*SOKR", len 5). Double-check the message direction ` +
+							`(Request vs Response) and that the data begins with the DSP header.`;
+					}
+				}
+			} else {
+				// Auto: try request then response. The DSP header always starts at the first
+				// character with I13CNBF.SKTHEAD = '*SOKR', so we prefer the direction whose
+				// DSP header carries that signature.
+				let best = null;
+				for (const dir of ['request', 'response']) {
+					const headerRoots = findHeaderRootsForSchema(schema, dir);
+					if (!headerRoots.length) continue;
+					const r = runChain(headerRoots);
+					const dsp = r.headers.find(h => h.isDspRoot);
+					if (dsp && dsp.signatureOk) {
+						best = { ...r, autoDirection: dir };
+						break;
+					}
+					if (!best && r.headers.length) best = { ...r, autoDirection: dir };
+				}
+				if (best) {
+					headers = best.headers;
+					bodyBytes = best.bodyBytes;
+				}
+			}
+
+			// 5. Parse the body with the selected root element (or all segments)
 			if (isAllSegments) {
-				// Parse every segment found in the buffer (split by initiators)
-				const segResult = parseAbcsSegments(schema, bytes, {
+				const segResult = parseAbcsSegments(schema, bodyBytes, {
 					defaultEncoding: defaultEncoding,
 					defaultByteOrder: byteOrder,
 					stripPad: stripPad
 				});
 
+				if (segResult.segments.length === 0) {
+					const enc = detectTextEncoding(bodyBytes);
+					detectedMarkers = findRecordMarkers(bodyBytes, enc, availableRoots);
+				}
+
 				results = {
-					mode: 'segments',
+					mode: headers.length ? 'header+segments' : 'segments',
 					segments: segResult.segments,
 					detectedEncoding: segResult.detectedEncoding,
 					totalBytes: segResult.totalBytes,
@@ -219,16 +416,16 @@
 					rootElement: rootElement.trim(),
 					schemaFields: [],
 					encoding: segResult.detectedEncoding,
-					byteOrder: byteOrder
+					byteOrder: byteOrder,
+					startOffset: offset
 				};
 
 				flatFields = segResult.segments.flatMap((s, i) =>
 					s.fields.map(f => ({ ...f, path: `[Seg${i + 1}] ${f.path}` }))
 				);
 			} else {
-				// Parse a single segment with the selected root element
 				const schemaTree = buildSchemaTree(schema, rootElement.trim());
-				const { json, debug, fields } = parseAbcsBinary(schemaTree, bytes, {
+				const { json, debug, fields } = parseAbcsBinary(schemaTree, bodyBytes, {
 					rootName: rootElement.trim(),
 					defaultEncoding: defaultEncoding,
 					defaultByteOrder: byteOrder,
@@ -236,16 +433,32 @@
 				});
 
 				results = {
-					mode: 'single',
+					mode: headers.length ? 'header+single' : 'single',
 					json: json,
 					debug: debug,
 					rootElement: rootElement.trim(),
 					schemaFields: schemaTree.children.map(c => c.name),
 					encoding: debug.detectedEncoding,
-					byteOrder: byteOrder
+					byteOrder: byteOrder,
+					startOffset: offset
 				};
 
 				flatFields = fields;
+
+				// Sanity check: if the body root didn't consume the whole body, the data
+				// may be a different record type or contain multiple records.
+				const consumed = debug.consumedBytes;
+				const remaining = bodyBytes.length - consumed;
+				if (remaining > 8) {
+					parseWarning = `Only ${consumed} of ${bodyBytes.length} body bytes were consumed by the selected root "${rootElement.trim()}". ` +
+						`${remaining} byte${remaining === 1 ? '' : 's'} remain — the data may be a different record type, ` +
+						`contain multiple records, or need a start offset.`;
+				}
+			}
+
+			// 6. Attach the mapped header chain (if any) to the results
+			if (headers.length) {
+				results.headers = headers;
 			}
 		} catch (err) {
 			error = err.message || String(err);
@@ -258,8 +471,20 @@
 		if (!results) return;
 		let payload;
 		let filename;
-		if (results.mode === 'segments') {
+		const headerBlock = results.headers && results.headers.length
+			? {
+					headers: results.headers.map(h => ({
+						root: h.root,
+						json: h.json,
+						length: h.length,
+						declaredLength: h.declaredLength
+					})),
+					direction: messageDirection
+				}
+			: {};
+		if (isSegmentsMode || results.mode === 'header+segments') {
 			const combined = {
+				...headerBlock,
 				detectedEncoding: results.detectedEncoding,
 				segments: results.segments.map((s, i) => ({
 					root: s.rootName,
@@ -272,7 +497,10 @@
 			payload = JSON.stringify(combined, null, 2);
 			filename = 'abcs-segments.json';
 		} else {
-			payload = JSON.stringify(results.json, null, 2);
+			const obj = results.mode === 'header+single'
+				? { ...headerBlock, body: results.json }
+				: results.json;
+			payload = JSON.stringify(obj, null, 2);
 			filename = `${results.rootElement.toLowerCase()}-abcs.json`;
 		}
 		const blob = new Blob([payload], { type: 'application/json' });
@@ -298,12 +526,12 @@
 		if (!results) return;
 		const lines = [];
 		lines.push(`=== ABCS Converter Debug ===`);
-		lines.push(`Mode              : ${results.mode === 'segments' ? 'All segments' : 'Single'}`);
+		lines.push(`Mode              : ${isSegmentsMode ? 'All segments' : 'Single'}`);
 		lines.push(`Root Element      : ${results.rootElement}`);
 		lines.push(`Default Encoding  : ${results.encoding}`);
 		lines.push(`Byte Order        : ${results.byteOrder}`);
 
-		if (results.mode === 'segments') {
+		if (isSegmentsMode) {
 			lines.push(`Total Bytes       : ${results.totalBytes}`);
 			lines.push(`Segments          : ${results.segments.length}`);
 			lines.push(`Preamble (${results.preambleLength} bytes):`);
@@ -348,7 +576,7 @@
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = `${results.mode === 'segments' ? 'abcs-segments' : results.rootElement.toLowerCase()}-abcs-debug.txt`;
+		a.download = `${isSegmentsMode ? 'abcs-segments' : results.rootElement.toLowerCase()}-abcs-debug.txt`;
 		a.click();
 		URL.revokeObjectURL(url);
 	}
@@ -356,9 +584,13 @@
 	function resetForm() {
 		schemaFile = null;
 		schemaText = '';
+		schemaTexts = [];
 		rootElement = '';
 		availableRoots = [];
 		schemaNotice = '';
+		messageDirection = 'auto';
+		mapABCSHeader = true;
+		mergeSelection = [];
 		binaryFile = null;
 		binaryFileName = '';
 		binaryFileSize = 0;
@@ -369,8 +601,11 @@
 		byteOrder = 'bigEndian';
 		stripPad = true;
 		showDebug = true;
+		byteOffset = 0;
 		results = null;
 		error = '';
+		parseWarning = '';
+		detectedMarkers = [];
 		flatFields = [];
 		selectedStoredFile = '';
 	}
@@ -453,6 +688,49 @@
 									</button>
 								{/if}
 							</div>
+
+							{#if storedFiles.length > 1}
+								<div class="mt-4 pt-4 border-t border-indigo-200">
+									<span class="block text-sm font-medium text-gray-700 mb-2">
+										Merge schemas (header + body)
+									</span>
+									<div class="space-y-2">
+										{#each storedFiles as file}
+											<label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+												<input
+													type="checkbox"
+													checked={mergeSelection.includes(file.name)}
+													onchange={(e) => {
+														mergeSelection = e.target.checked
+															? [...mergeSelection, file.name]
+															: mergeSelection.filter(n => n !== file.name);
+													}}
+													class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+												/>
+												<span class="font-mono text-xs">{file.name}</span>
+											</label>
+										{/each}
+									</div>
+									<div class="flex gap-2 mt-3">
+										<button
+											onclick={mergeSelectedFiles}
+											class="px-4 py-2 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 text-sm font-semibold transition-all"
+										>
+											Merge selected
+										</button>
+										<button
+											onclick={quickMergeHeaderAndBody}
+											class="px-4 py-2 bg-purple-500 text-white rounded-xl hover:bg-purple-600 text-sm font-semibold transition-all"
+										>
+											Auto (header + body)
+										</button>
+									</div>
+									<p class="mt-2 text-xs text-gray-500">
+										Tick the header schema (e.g. <code class="font-mono bg-gray-100 px-1 rounded">DSPHeader.xsd</code>) and the body schema
+										(e.g. <code class="font-mono bg-gray-100 px-1 rounded">abcs.xml</code>), then Merge — both root sets become available in the dropdown.
+									</p>
+								</div>
+							{/if}
 						</div>
 					{/if}
 
@@ -506,11 +784,75 @@
 					</select>
 					<p class="mt-2 text-xs text-gray-500">
 						{#if availableRoots.length > 0}
-							Auto-detected from the loaded schema. Equivalent to daffodil's
+							Auto-detected from the loaded schema; header roots (<code class="font-mono bg-gray-100 px-1 rounded">DSPHeader</code>/<code class="font-mono bg-gray-100 px-1 rounded">ABCSHeader</code>)
+							are omitted here because they are auto-mapped from the first character. Equivalent to daffodil's
 							<code class="font-mono bg-gray-100 px-1 rounded">--root</code> option.
 						{:else}
-							Upload a schema file to auto-populate the available root elements (e.g. RMQK1).
+							Upload a schema file to auto-populate the available root elements (e.g. ABCSBody).
 						{/if}
+					</p>
+				</div>
+
+				<!-- Message Direction -->
+				<div>
+					<span class="block text-sm font-medium text-gray-700 mb-2">
+						Message Direction (header mapping)
+					</span>
+					<div class="grid grid-cols-3 gap-3">
+						<label class="flex items-center justify-center space-x-2 p-3 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 cursor-pointer hover:from-indigo-100 hover:to-purple-100 transition-all">
+							<input
+								type="radio"
+								bind:group={messageDirection}
+								value="auto"
+								class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+							/>
+							<span class="text-gray-800 text-sm font-medium">Auto</span>
+						</label>
+						<label class="flex items-center justify-center space-x-2 p-3 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 cursor-pointer hover:from-emerald-100 hover:to-teal-100 transition-all">
+							<input
+								type="radio"
+								bind:group={messageDirection}
+								value="request"
+								class="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300"
+							/>
+							<span class="text-gray-800 text-sm font-medium">Request</span>
+						</label>
+						<label class="flex items-center justify-center space-x-2 p-3 rounded-xl bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200 cursor-pointer hover:from-sky-100 hover:to-blue-100 transition-all">
+							<input
+								type="radio"
+								bind:group={messageDirection}
+								value="response"
+								class="h-4 w-4 text-sky-600 focus:ring-sky-500 border-gray-300"
+							/>
+							<span class="text-gray-800 text-sm font-medium">Response</span>
+						</label>
+					</div>
+					<p class="mt-2 text-xs text-gray-500">
+						{#if messageDirection === 'auto'}
+							Auto-detects request vs response by trying <code class="font-mono bg-gray-100 px-1 rounded">DSPHeader</code> (request) then
+							<code class="font-mono bg-gray-100 px-1 rounded">DSPHeaderResponse</code> (response). The DSP header always starts at the first
+							character and is accepted when its <code class="font-mono bg-gray-100 px-1 rounded">I13CNBF.SKTHEAD</code> is <code class="font-mono bg-gray-100 px-1 rounded">*SOKR</code> (len 5);
+							<code class="font-mono bg-gray-100 px-1 rounded">I13HLEN</code> is used to find the body start.
+						{:else}
+							Maps the <code class="font-mono bg-gray-100 px-1 rounded">{messageDirection === 'request' ? 'DSPHeader' : 'DSPHeaderResponse'}</code> header
+							first (it always starts at the first character), then parses the remaining bytes as the body. Requires both the header schema and the body schema to be loaded (see "Merge schemas" below).
+						{/if}
+					</p>
+					<div class="mt-3 flex items-center p-4 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200">
+						<input
+							type="checkbox"
+							id="map-abcs-header"
+							bind:checked={mapABCSHeader}
+							class="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+						/>
+						<label for="map-abcs-header" class="ml-3 block text-sm text-gray-700 font-medium">
+							Also map the ABCS-layer header (<code class="font-mono bg-gray-100 px-1 rounded">ABCSHeader</code>/<code class="font-mono bg-gray-100 px-1 rounded">ABCSHeaderResponse</code>, <code class="font-mono bg-gray-100 px-1 rounded">ICLEN</code>) after the DSP header
+						</label>
+					</div>
+					<p class="mt-2 text-xs text-gray-500">
+						The ABCS-layer header is auto-detected: it is only mapped when its <code class="font-mono bg-gray-100 px-1 rounded">ICLEN</code>
+						is a sane length, so messages without it (e.g. starting directly with the DSP header) still parse correctly.
+						The message order is <code class="font-mono bg-gray-100 px-1 rounded">DSPHeader</code> → <code class="font-mono bg-gray-100 px-1 rounded">ABCSHeader</code> → <code class="font-mono bg-gray-100 px-1 rounded">ABCSBody</code>.
 					</p>
 				</div>
 			</div>
@@ -675,6 +1017,27 @@
 						</p>
 					</div>
 
+					<div>
+						<label for="byte-offset" class="block text-sm font-medium text-gray-700 mb-2">
+							Start Byte Offset
+						</label>
+						<input
+							type="number"
+							id="byte-offset"
+							bind:value={byteOffset}
+							min="0"
+							step="1"
+							class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all font-mono"
+						/>
+						<p class="mt-2 text-xs text-gray-500">
+							Skip this many bytes before parsing. Use the byte offset of a
+							<code class="font-mono bg-gray-100 px-1 rounded">*XXX</code>/<code class="font-mono bg-gray-100 px-1 rounded">..XX</code>
+							record marker (shown in the diagnostic below) to parse a single record inside a multi-record
+							message. 0 = start at the beginning.
+						</p>
+					</div>
+
+
 					<div class="flex items-center p-4 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200">
 						<input
 							type="checkbox"
@@ -747,6 +1110,26 @@
 			</section>
 		{/if}
 
+		{#if parseWarning}
+			<section class="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-2xl shadow-xl border border-amber-100 overflow-hidden">
+				<div class="bg-gradient-to-r from-amber-500 to-yellow-500 p-4">
+					<div class="flex items-center space-x-3">
+						<Icon icon="mdi-light:alert" class="h-5 w-5 text-white" />
+						<h3 class="text-lg font-bold text-white">Parse Warning</h3>
+					</div>
+				</div>
+				<div class="p-6">
+					<div class="flex items-start space-x-3">
+						<div class="rounded-full bg-amber-100 p-2 shrink-0">
+							<Icon icon="mdi-light:alert-circle" class="h-6 w-6 text-amber-600" />
+						</div>
+						<p class="text-amber-800 font-medium">{parseWarning}</p>
+					</div>
+				</div>
+			</section>
+		{/if}
+
+
 		<!-- Results Section -->
 		{#if results}
 			<section class="bg-white rounded-2xl shadow-xl border border-indigo-100 overflow-hidden">
@@ -789,14 +1172,14 @@
 							<div class="bg-white rounded-lg p-3 border border-indigo-100">
 								<span class="font-medium text-indigo-700">Root Element:</span>
 								<div class="text-gray-900 mt-1 font-mono">
-									{#if results.mode === 'segments'}All segments{:else}{results.rootElement}{/if}
+									{#if isSegmentsMode}All segments{:else}{results.rootElement}{/if}
 								</div>
 							</div>
 							<div class="bg-white rounded-lg p-3 border border-indigo-100">
 								<span class="font-medium text-indigo-700">Total Bytes:</span>
-								<div class="text-gray-900 mt-1">{results.mode === 'segments' ? results.totalBytes : results.debug.totalBytes}</div>
+								<div class="text-gray-900 mt-1">{isSegmentsMode ? results.totalBytes : results.debug.totalBytes}</div>
 							</div>
-							{#if results.mode === 'segments'}
+							{#if isSegmentsMode}
 								<div class="bg-white rounded-lg p-3 border border-indigo-100">
 									<span class="font-medium text-indigo-700">Segments:</span>
 									<div class="text-gray-900 mt-1">{results.segments.length}</div>
@@ -826,17 +1209,71 @@
 					</div>
 
 
+					<!-- Header Mapping -->
+					{#if results.headers && results.headers.length}
+						<div class="space-y-4">
+							{#each results.headers as h, hi}
+								<div class="bg-white border-2 border-indigo-200 rounded-xl overflow-hidden">
+									<div class="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-b-2 border-indigo-200 flex items-center justify-between">
+										<div class="flex items-center space-x-3">
+											<Icon icon="mdi:package-variant-closed" class="h-5 w-5 text-indigo-600 shrink-0" />
+											<div>
+												<div class="font-semibold text-gray-800">
+													Mapped Header {hi + 1}: <span class="font-mono text-indigo-700">{h.root}</span>
+													<span class="ml-2 inline-block text-[11px] font-mono px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 uppercase">
+														{h.root.toLowerCase().includes('abcs') ? 'ABCS' : (messageDirection === 'auto' ? (h.declaredSane ? 'auto' : '') : messageDirection)}
+													</span>
+												</div>
+												<div class="text-xs text-gray-500 font-mono">
+													{h.length} bytes (declared {h.declaredLength ?? '—'}) · {h.consumedBytes} consumed · {h.debug.detectedEncoding}
+													{#if h.isDspRoot}
+														<span class="ml-2 {h.signatureOk ? 'text-green-600' : 'text-red-500 font-semibold'}">
+															SKTHEAD = {JSON.stringify(h.skthead)}{h.signatureOk ? ' ✓' : ' ✗ (expected *SOKR)'}
+														</span>
+													{/if}
+												</div>
+											</div>
+										</div>
+									</div>
+									<pre class="text-xs bg-gray-50 p-4 overflow-x-auto max-h-72 overflow-y-auto font-mono whitespace-pre">{JSON.stringify(h.json, null, 2)}</pre>
+								</div>
+							{/each}
+						</div>
+					{/if}
+
+
 					<!-- JSON Output -->
-					{#if results.mode === 'segments'}
+					{#if isSegmentsMode}
 						{#if results.segments.length === 0}
 							<div class="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-xl p-4 border border-yellow-200">
 								<div class="flex items-center space-x-2">
 									<Icon icon="mdi-light:alert" class="h-5 w-5 text-yellow-600 shrink-0" />
 									<p class="text-yellow-800 text-sm font-medium">
-										No segments were detected. Check that the schema root elements have initiators (e.g. <code class="font-mono bg-white px-1 rounded">..K1</code>), or pick a single root element.
+										No segments were detected. The schema root elements have no matching initiators in this data. Check that the schema roots declare <code class="font-mono bg-white px-1 rounded">dfdl:initiator</code> (e.g. <code class="font-mono bg-white px-1 rounded">..K1</code>), or pick a single root element and set the <em>Start Byte Offset</em> below.
 									</p>
 								</div>
 							</div>
+							{#if detectedMarkers.length > 0}
+								<div class="bg-white/60 rounded-lg p-3 border border-yellow-200">
+									<p class="text-yellow-800 text-xs font-semibold mb-2">
+										Record markers found in the data (no schema root matched these):
+									</p>
+									<div class="flex flex-wrap gap-2">
+										{#each detectedMarkers as mk}
+											<span class="font-mono text-[11px] bg-yellow-100 text-yellow-900 px-2 py-1 rounded">
+												{mk.text} @ byte {mk.position}
+											</span>
+										{/each}
+									</div>
+									<p class="text-yellow-800 text-xs mt-2">
+										To parse a record at one of these markers, pick the matching root element and enter that byte
+										offset in <em>Start Byte Offset</em> (note: if the marker is the record's initiator, add its
+										length, e.g. <code class="font-mono bg-white px-1 rounded">*DSP</code> = 4 bytes).
+									</p>
+								</div>
+							{/if}
+
+
 						{/if}
 						{#each results.segments as seg, idx}
 							<div class="bg-white border-2 border-gray-200 rounded-xl overflow-hidden">
@@ -916,10 +1353,10 @@
 							<div class="space-y-4">
 								<div class="bg-white rounded-lg p-3 border border-indigo-100">
 									<h4 class="font-medium text-gray-700 mb-2">
-										Detected Encoding: <span class="font-mono text-indigo-600">{results.mode === 'segments' ? results.detectedEncoding : results.debug.detectedEncoding}</span>
+										Detected Encoding: <span class="font-mono text-indigo-600">{isSegmentsMode ? results.detectedEncoding : results.debug.detectedEncoding}</span>
 									</h4>
 								</div>
-								{#if results.mode === 'segments'}
+								{#if isSegmentsMode}
 									<div class="bg-white rounded-lg p-3 border border-indigo-100">
 										<h4 class="font-medium text-gray-700 mb-2">
 											Preamble (before first segment, {results.preambleLength} bytes):

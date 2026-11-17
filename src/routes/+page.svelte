@@ -76,14 +76,6 @@
             link: '/hex-ebcdic-converter'
 		},
 		{
-			id: 9,
-			title: 'ISO8583:1987 ITM Banking',
-			description: 'Specialized ISO8583 parser for ITM banking systems',
-			icon: 'mdi-light:bank',
-			color: 'from-emerald-500 to-teal-500',
-            link: '/iso8583-1987-itm'
-		},
-		{
 			id: 10,
 			title: 'Base64 Auto-Detect & Decoder',
 			description: 'Automatically detect and decode various data formats',

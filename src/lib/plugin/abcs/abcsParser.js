@@ -427,8 +427,20 @@ function isBinaryType(typeName) {
 		t === 'base64binary' ||
 		t === 'hexb' ||
 		t.includes('hex') ||
-		t.includes('binary') ||
+		(t.includes('binary') && !t.includes('numeric')) || // numeric binary types are handled by isBinaryNumeric
 		t.includes('filler__')
+	);
+}
+
+/**
+ * IBM binary numeric types (e.g. `SIBS-Binary-Numeric__int`, used for the ABCS
+ * header `ICLEN`). These are raw fixed-width binary integers, not zoned/packed.
+ */
+function isBinaryNumeric(typeName) {
+	const t = String(typeName || '').replace(/^xs:/, '').toLowerCase();
+	return (
+		t.includes('binary') &&
+		(t.includes('numeric') || t.includes('integer') || t.includes('__int') || t.includes('__short') || t.includes('__long'))
 	);
 }
 
@@ -559,6 +571,7 @@ export function parseAbcsSchema(xmlText) {
 	const schemaEl = doc.documentElement;
 	const typeRegistry = {};
 	const rootTypes = {};
+	const elementRegistry = {};
 
 	// Register named complexType definitions
 	const allElements = doc.getElementsByTagName('*');
@@ -567,6 +580,17 @@ export function parseAbcsSchema(xmlText) {
 		if (local === 'complexType') {
 			const name = getAttr(el, 'name');
 			if (name) typeRegistry[name] = el;
+		}
+	}
+
+	// Register ALL named <xs:element> definitions (top-level and nested), so the
+	// header/body roots can be resolved even when they are children of a wrapper
+	// element (e.g. ABCSMessage -> DSPHeader, ABCSHeader, ABCSBody).
+	for (const el of allElements) {
+		const local = el.localName || el.nodeName.split(':').pop();
+		if (local === 'element') {
+			const name = getAttr(el, 'name') || getAttr(el, 'ref');
+			if (name) elementRegistry[name] = el;
 		}
 	}
 
@@ -579,7 +603,190 @@ export function parseAbcsSchema(xmlText) {
 		}
 	}
 
-	return { rootTypes, typeRegistry, schemaEl };
+	return { rootTypes, typeRegistry, elementRegistry, schemaEl };
+}
+
+/**
+ * Merge several parsed schemas (e.g. a header schema + a body schema) into one,
+ * so their root elements and named type definitions can be used together.
+ * Later schemas override earlier ones on name collisions.
+ *
+ * @param {Array<{rootTypes:object, typeRegistry:object, schemaEl:object}>} schemas
+ * @returns {{rootTypes: object, typeRegistry: object, schemaEl: object|null}}
+ */
+export function mergeSchemas(schemas) {
+	const rootTypes = {};
+	const typeRegistry = {};
+	const elementRegistry = {};
+	let schemaEl = null;
+	for (const s of schemas || []) {
+		if (!s) continue;
+		Object.assign(rootTypes, s.rootTypes || {});
+		Object.assign(typeRegistry, s.typeRegistry || {});
+		Object.assign(elementRegistry, s.elementRegistry || {});
+		if (!schemaEl && s.schemaEl) schemaEl = s.schemaEl;
+	}
+	return { rootTypes, typeRegistry, elementRegistry, schemaEl };
+}
+
+/**
+ * Find the root element that represents the message header for a given direction.
+ *
+ * Request  -> prefers an exact `DSPHeader`, else a name containing "Header"
+ *             but not "Response" (e.g. `DSPHeader`, `RequestHeader`).
+ * Response -> prefers an exact `DSPHeaderResponse`, else a name containing
+ *             "Response" (e.g. `DSPHeaderResponse`).
+ *
+ * @param {string[]} rootNames - available root element names
+ * @param {'request'|'response'} direction
+ * @returns {string|null}
+ */
+export function findHeaderRoot(rootNames, direction) {
+	const names = (rootNames || []).map(n => String(n));
+	const norm = (n) => n.toLowerCase();
+
+	if (direction === 'response') {
+		return (
+			names.find(n => norm(n) === 'dspheaderresponse') ||
+			names.find(n => norm(n).includes('response') && norm(n).includes('header')) ||
+			names.find(n => norm(n).includes('response')) ||
+			null
+		);
+	}
+
+	return (
+		names.find(n => norm(n) === 'dspheader') ||
+		names.find(n => norm(n).includes('header') && !norm(n).includes('response')) ||
+		names.find(n => norm(n).includes('header')) ||
+		null
+	);
+}
+
+/**
+ * Find ALL header root elements for a direction, in message order.
+ *
+ * A message is typically layered as:
+ *   DSPHeader (or DSPHeaderResponse) -> ABCSHeader (or ABCSHeaderResponse) -> ABCSBody
+ * so this returns the ordered list of header roots (DSP layer first, then the
+ * ABCS layer), regardless of whether the schema names them with a direction
+ * suffix. If no direction-specific root is found it falls back to any root whose
+ * name contains "Header", so a schema with only one header variant still works.
+ *
+ * @param {string[]} rootNames - available root element names
+ * @param {'request'|'response'} direction
+ * @returns {string[]} ordered header root names (may be empty)
+ */
+export function findHeaderRoots(rootNames, direction) {
+	const names = (rootNames || []).map(n => String(n));
+	const norm = n => n.toLowerCase();
+	const isHeader = n => norm(n).includes('header');
+	const isResp = n => /response|resp|rsp|reply/i.test(norm(n));
+
+	let matches;
+	if (direction === 'response') {
+		// Prefer roots that are headers AND response-flavoured (e.g. DSPHeaderResponse).
+		matches = names.filter(n => isHeader(n) && isResp(n));
+		if (!matches.length) matches = names.filter(isHeader);
+	} else {
+		// Request: headers that are NOT response-flavoured (e.g. DSPHeader).
+		matches = names.filter(n => isHeader(n) && !isResp(n));
+		if (!matches.length) matches = names.filter(isHeader);
+	}
+
+	// Order: DSP layer first, then the ABCS layer, then any other header roots.
+	matches.sort((a, b) => {
+		const layer = n => (norm(n).includes('dsp') ? 0 : (norm(n).includes('abcs') ? 1 : 2));
+		const la = layer(a);
+		const lb = layer(b);
+		if (la !== lb) return la - lb;
+		return norm(a).localeCompare(norm(b));
+	});
+
+	return matches;
+}
+
+/**
+ * Like {@link findHeaderRoots}, but schema-aware: prefers header roots among the
+ * top-level root elements, and falls back to ANY named element in the schema.
+ * The fallback covers schemas where DSPHeader/ABCSHeader/ABCSBody are children of
+ * a wrapper root (e.g. ABCSMessage) rather than separate top-level elements.
+ *
+ * @param {{rootTypes:object, elementRegistry:object}} schema
+ * @param {'request'|'response'} direction
+ * @returns {string[]} ordered header root names (may be empty)
+ */
+export function findHeaderRootsForSchema(schema, direction) {
+	const top = findHeaderRoots(Object.keys(schema?.rootTypes || {}), direction);
+	if (top.length) return top;
+	return findHeaderRoots(Object.keys(schema?.elementRegistry || {}), direction);
+}
+
+/**
+ * Find a numeric field value anywhere in a parsed infoset (recursively).
+ * Used to read header length fields (ICLEN / I13HLEN / I13MLEN).
+ *
+ * @param {object} json
+ * @param {string} key - field name (e.g. 'I13HLEN', 'ICLEN')
+ * @returns {number|null}
+ */
+export function extractFieldValue(json, key) {
+	const num = (v) => {
+		if (typeof v === 'number' && Number.isFinite(v)) return v;
+		if (typeof v === 'string') {
+			const n = parseInt(v.replace(/[^0-9-]/g, ''), 10);
+			return Number.isFinite(n) ? n : null;
+		}
+		return null;
+	};
+	const walk = (obj) => {
+		if (!obj || typeof obj !== 'object') return null;
+		if (key in obj) return num(obj[key]);
+		for (const v of Object.values(obj)) {
+			if (v && typeof v === 'object') {
+				const r = walk(v);
+				if (r != null) return r;
+			}
+		}
+		return null;
+	};
+	return walk(json);
+}
+
+/**
+ * Find a raw field value anywhere in a parsed infoset (recursively), without
+ * numeric coercion. Used to read string fields such as I13CNBF.SKTHEAD.
+ *
+ * @param {object} json
+ * @param {string} key - field name (e.g. 'SKTHEAD')
+ * @returns {*} the raw value, or undefined
+ */
+export function findFieldValue(json, key) {
+	const walk = (obj) => {
+		if (!obj || typeof obj !== 'object') return undefined;
+		if (key in obj) return obj[key];
+		for (const v of Object.values(obj)) {
+			if (v && typeof v === 'object') {
+				const r = walk(v);
+				if (r !== undefined) return r;
+			}
+		}
+		return undefined;
+	};
+	return walk(json);
+}
+
+/**
+ * Extract the declared header/message length from a parsed header infoset.
+ * Works for both the ABCS header (`ICLEN`) and the DSP header (`I13HLEN`/`I13MLEN`).
+ *
+ * @param {object} json - the parsed header JSON (e.g. { DSPHeaderResponse: {...} })
+ * @returns {{ headerLength: number|null, messageLength: number|null }}
+ */
+export function extractHeaderLengths(json) {
+	return {
+		headerLength: extractFieldValue(json, 'I13HLEN') ?? extractFieldValue(json, 'ICLEN'),
+		messageLength: extractFieldValue(json, 'I13MLEN')
+	};
 }
 
 /**
@@ -589,7 +796,7 @@ export function buildSchemaTree(schema, rootName) {
 	if (!schema || !schema.rootTypes) {
 		throw new Error('No schema loaded');
 	}
-	const rootEl = schema.rootTypes[rootName];
+	const rootEl = schema.rootTypes[rootName] || (schema.elementRegistry && schema.elementRegistry[rootName]);
 	if (!rootEl) {
 		const available = Object.keys(schema.rootTypes);
 		throw new Error(
@@ -812,7 +1019,9 @@ function decodeOne(node, bytes, startOffset, ctx) {
 
 	// Decode value
 	let value;
-	if (isBinaryType(node.typeName)) {
+	if (isBinaryNumeric(node.typeName)) {
+		value = decodeNumber(valueBytes, node, effectiveByteOrder);
+	} else if (isBinaryType(node.typeName)) {
 		value = bytesToHex(valueBytes);
 	} else if (isPackedDecimal(node)) {
 		value = decodePackedDecimal(valueBytes);
@@ -933,17 +1142,26 @@ export function scanSegments(schema, bytes, detectedEncoding) {
 		}
 	}
 
-	// Fallback: detect `..XX` markers and match by root-name suffix
+	// Fallback: detect `..XX` / `*XXX` markers and match by root-name suffix.
+	// The marker length is ambiguous (e.g. `*DSP` vs `*DSPA`), so for each
+	// occurrence we try the longest code that maps to a root name.
 	if (found.length === 0) {
 		const decoded = decodeString(bytes, detectedEncoding);
-		const regex = /\.\.([A-Za-z0-9]{2})/g;
+		const rootNames = Object.keys(schema.rootTypes || {});
+		const regex = /(\.\.|\*)([A-Za-z0-9]{2,4})/g;
 		let m;
 		while ((m = regex.exec(decoded))) {
-			const code = m[1].toUpperCase();
+			const prefix = m[1];
+			const raw = m[2].toUpperCase();
+			let code = null;
 			let rootName = null;
-			for (const rn of Object.keys(schema.rootTypes || {})) {
-				if (rn.toUpperCase().endsWith(code)) {
-					rootName = rn;
+			// Try longest first so `*DSPA` still matches a root ending in `DSP`.
+			for (let len = Math.min(4, raw.length); len >= 2; len--) {
+				const candidate = raw.slice(0, len);
+				const match = rootNames.find(rn => rn.toUpperCase().endsWith(candidate));
+				if (match) {
+					code = candidate;
+					rootName = match;
 					break;
 				}
 			}
@@ -951,8 +1169,8 @@ export function scanSegments(schema, bytes, detectedEncoding) {
 				found.push({
 					position: m.index,
 					rootName,
-					initiator: m[0],
-					initBytes: encodeString(m[0], detectedEncoding)
+					initiator: prefix + code,
+					initBytes: encodeString(prefix + code, detectedEncoding)
 				});
 			}
 		}
@@ -960,6 +1178,46 @@ export function scanSegments(schema, bytes, detectedEncoding) {
 
 	found.sort((a, b) => a.position - b.position);
 	return found;
+}
+
+/**
+ * Scan a buffer for record delimiter markers of the form `..XX` or `*XXX`
+ * (as commonly used in ABCS/IBM messages), returning each with its byte offset.
+ * Useful for diagnosing why segment auto-detection found no matching roots.
+ *
+ * @param {Uint8Array} bytes
+ * @param {string} encoding
+ * @param {string[]} [rootSuffixes] - optional list of root element names, used to
+ *   trim the marker code to the longest suffix that matches a root.
+ * @returns {Array<{prefix:string, code:string, text:string, position:number, length:number}>}
+ */
+export function findRecordMarkers(bytes, encoding, rootSuffixes) {
+	const decoded = decodeString(bytes, encoding);
+	const markers = [];
+	const regex = /(\.\.|\*)([A-Za-z0-9]{2,4})/g;
+	let m;
+	while ((m = regex.exec(decoded))) {
+		const prefix = m[1];
+		const raw = m[2].toUpperCase();
+		let code = raw;
+		if (rootSuffixes && rootSuffixes.length) {
+			for (let len = Math.min(4, raw.length); len >= 2; len--) {
+				const candidate = raw.slice(0, len);
+				if (rootSuffixes.some(rn => String(rn).toUpperCase().endsWith(candidate))) {
+					code = candidate;
+					break;
+				}
+			}
+		}
+		markers.push({
+			prefix,
+			code,
+			text: prefix + code,
+			position: m.index,
+			length: (prefix + code).length
+		});
+	}
+	return markers;
 }
 
 /**
