@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { jsonToYaml, yamlToJson, jsonToCsv, csvToJson } from '#lib/json/convert';
 	import { jsonToXml, xmlToJson } from '#lib/json/xml';
 	import { queryJsonPath } from '#lib/json/jsonpath';
@@ -11,13 +12,13 @@
 	type Tab = 'convert' | 'minify' | 'query' | 'schema' | 'mock' | 'paginate' | 'clean';
 
 	const tabs: { id: Tab; label: string; icon: string }[] = [
-		{ id: 'convert', label: 'Convert', icon: 'mdi-light:swap-horizontal' },
-		{ id: 'minify', label: 'Minify', icon: 'mdi-light:compress' },
-		{ id: 'query', label: 'JSONPath', icon: 'mdi-light:magnify' },
-		{ id: 'schema', label: 'Schema', icon: 'mdi-light:file-code' },
-		{ id: 'mock', label: 'Mock', icon: 'mdi-light:auto-fix' },
-		{ id: 'paginate', label: 'Paginate', icon: 'mdi-light:page-next' },
-		{ id: 'clean', label: 'Clean', icon: 'mdi-light:broom' }
+		{ id: 'convert', label: 'Convert', icon: 'mdi:swap-horizontal' },
+		{ id: 'minify', label: 'Minify', icon: 'mdi:compress' },
+		{ id: 'query', label: 'JSONPath', icon: 'mdi:magnify' },
+		{ id: 'schema', label: 'Schema', icon: 'mdi:file-code-outline' },
+		{ id: 'mock', label: 'Mock', icon: 'mdi:auto-fix' },
+		{ id: 'paginate', label: 'Paginate', icon: 'mdi:page-next' },
+		{ id: 'clean', label: 'Clean', icon: 'mdi:broom' }
 	];
 
 	let activeTab = $state<Tab>('convert');
@@ -75,6 +76,8 @@
 				: 'json'
 			: 'json'
 	);
+
+	let activeLabel = $derived(tabs.find((t) => t.id === activeTab)?.label ?? '');
 
 	function setResult(text: string, metaText = '') {
 		output = text;
@@ -161,6 +164,60 @@
 		}
 	}
 
+	function selectTab(id: Tab) {
+		activeTab = id;
+		clearOutput();
+	}
+
+	function runActive() {
+		if (activeTab === 'convert') runConvert();
+		else if (activeTab === 'minify') runMinify();
+		else if (activeTab === 'query') runQuery();
+		else if (activeTab === 'schema') runSchema();
+		else if (activeTab === 'mock') runMock();
+		else if (activeTab === 'paginate') runPaginate();
+		else if (activeTab === 'clean') runClean();
+	}
+
+	function clearOutput() {
+		output = '';
+		error = '';
+		meta = '';
+	}
+
+	function downloadOutput() {
+		if (!output) return;
+		const ext = outputLang === 'yaml' ? 'yaml' : outputLang === 'plaintext' ? 'txt' : 'json';
+		const blob = new Blob([output], { type: 'application/octet-stream' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `json-tools-output.${ext}`;
+		document.body.appendChild(a);
+		a.click();
+		a.remove();
+		URL.revokeObjectURL(url);
+	}
+
+	// Alt+1..7 switches feature, Ctrl/Cmd+Enter runs the active feature.
+	function onGlobalKey(e: KeyboardEvent) {
+		if (e.altKey && !e.ctrlKey && !e.metaKey && /^[1-7]$/.test(e.key)) {
+			const n = Number(e.key);
+			if (n >= 1 && n <= tabs.length) {
+				e.preventDefault();
+				selectTab(tabs[n - 1].id);
+			}
+		} else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+			e.preventDefault();
+			runActive();
+		}
+	}
+
+	onMount(() => {
+		window.addEventListener('keydown', onGlobalKey);
+		return () => window.removeEventListener('keydown', onGlobalKey);
+	});
+
 	function copyOutput() {
 		navigator.clipboard?.writeText(output);
 	}
@@ -178,23 +235,60 @@
 			</div>
 		</div>
 	</div>
-	<div class="flex flex-wrap gap-1 bg-gray-50 border-b border-gray-200 p-2">
-		{#each tabs as tab}
+	<div class="flex items-center justify-between gap-2 bg-slate-800 px-2 py-1.5">
+		<div class="flex items-center gap-0.5">
+			{#each tabs as tab, i}
+				<button
+					type="button"
+					title="{tab.label} (Alt+{i + 1})"
+					aria-label={tab.label}
+					onclick={() => selectTab(tab.id)}
+					class="p-1.5 rounded transition-colors {activeTab === tab.id
+						? 'bg-emerald-500 text-white'
+						: 'text-gray-400 hover:bg-slate-700 hover:text-white'}"
+				>
+					<SafeIcon iconName={tab.icon} customClass="h-5 w-5" />
+				</button>
+			{/each}
+		</div>
+		<div class="flex items-center gap-1">
 			<button
 				type="button"
-				onclick={() => {
-					activeTab = tab.id;
-					output = '';
-					error = '';
-					meta = '';
-				}}
-				class="px-3 py-1 text-sm font-medium rounded cursor-pointer transition-colors {activeTab === tab.id
-					? 'bg-emerald-500 text-white'
-					: 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'}"
+				title="Run {activeLabel} (Ctrl+Enter)"
+				onclick={runActive}
+				class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded cursor-pointer bg-emerald-500 text-white transition-colors hover:bg-emerald-600"
 			>
-				{tab.label}
+				<SafeIcon iconName="mdi:play" customClass="h-4 w-4" />
+				<span>{activeLabel}</span>
 			</button>
-		{/each}
+			<button
+				type="button"
+				title="Copy output"
+				aria-label="Copy output"
+				onclick={copyOutput}
+				class="p-1.5 rounded transition-colors text-gray-400 hover:bg-slate-700 hover:text-white"
+			>
+				<SafeIcon iconName="mdi:content-copy" customClass="h-5 w-5" />
+			</button>
+			<button
+				type="button"
+				title="Download output"
+				aria-label="Download output"
+				onclick={downloadOutput}
+				class="p-1.5 rounded transition-colors text-gray-400 hover:bg-slate-700 hover:text-white"
+			>
+				<SafeIcon iconName="mdi:download" customClass="h-5 w-5" />
+			</button>
+			<button
+				type="button"
+				title="Clear output"
+				aria-label="Clear output"
+				onclick={clearOutput}
+				class="p-1.5 rounded transition-colors text-gray-400 hover:bg-slate-700 hover:text-white"
+			>
+				<SafeIcon iconName="mdi:delete" customClass="h-5 w-5" />
+			</button>
+		</div>
 	</div>
 
 	<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
@@ -232,14 +326,7 @@
 					</button>
 				</div>
 				<MonacoField bind:value={convertInput} language={convertInLang} height="14rem" />
-				<button
-					type="button"
-					onclick={runConvert}
-					class="mt-2 px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer bg-emerald-500 text-white transition-all hover:bg-emerald-600"
-				>
-					Convert
-				</button>
-			{:else if activeTab === 'minify'}
+{:else if activeTab === 'minify'}
 				<div class="mb-2 flex items-center gap-2 text-sm text-gray-600">
 					<span>Indent:</span>
 					<select bind:value={minifyIndent} class="border border-gray-300 rounded px-2 py-1 text-sm">
@@ -249,46 +336,18 @@
 					</select>
 				</div>
 				<MonacoField bind:value={minifyInput} language="json" height="16rem" />
-				<button
-					type="button"
-					onclick={runMinify}
-					class="mt-2 px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer bg-emerald-500 text-white transition-all hover:bg-emerald-600"
-				>
-					Minify / Format
-				</button>
-			{:else if activeTab === 'query'}
+{:else if activeTab === 'query'}
 				<input
 					bind:value={queryPath}
 					placeholder="JSONPath expression, e.g. $.users[?(@.age > 26)].name"
 					class="mb-2 w-full px-3 py-2 text-sm font-mono border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
 				/>
 				<MonacoField bind:value={queryInput} language="json" height="14rem" />
-				<button
-					type="button"
-					onclick={runQuery}
-					class="mt-2 px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer bg-emerald-500 text-white transition-all hover:bg-emerald-600"
-				>
-					Run Query
-				</button>
-			{:else if activeTab === 'schema'}
+{:else if activeTab === 'schema'}
 				<MonacoField bind:value={schemaInput} language="json" height="16rem" />
-				<button
-					type="button"
-					onclick={runSchema}
-					class="mt-2 px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer bg-emerald-500 text-white transition-all hover:bg-emerald-600"
-				>
-					Generate Schema
-				</button>
-			{:else if activeTab === 'mock'}
+{:else if activeTab === 'mock'}
 				<MonacoField bind:value={mockInput} language="json" height="16rem" />
-				<button
-					type="button"
-					onclick={runMock}
-					class="mt-2 px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer bg-emerald-500 text-white transition-all hover:bg-emerald-600"
-				>
-					Generate Mock
-				</button>
-			{:else if activeTab === 'paginate'}
+{:else if activeTab === 'paginate'}
 				<div class="mb-2 flex gap-3 text-sm text-gray-600">
 					<label class="flex items-center gap-1">
 						Page
@@ -300,14 +359,7 @@
 					</label>
 				</div>
 				<MonacoField bind:value={paginateInput} language="json" height="14rem" />
-				<button
-					type="button"
-					onclick={runPaginate}
-					class="mt-2 px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer bg-emerald-500 text-white transition-all hover:bg-emerald-600"
-				>
-					Paginate
-				</button>
-			{:else if activeTab === 'clean'}
+{:else if activeTab === 'clean'}
 				<div class="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
 					<label><input type="checkbox" bind:checked={cleanOpts.removeNulls} /> Remove nulls</label>
 					<label><input type="checkbox" bind:checked={cleanOpts.removeEmptyObjects} /> Remove empty objects</label>
@@ -318,26 +370,12 @@
 					<label><input type="checkbox" bind:checked={cleanOpts.trimStrings} /> Trim strings</label>
 				</div>
 				<MonacoField bind:value={cleanInput} language="json" height="14rem" />
-				<button
-					type="button"
-					onclick={runClean}
-					class="mt-2 px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer bg-emerald-500 text-white transition-all hover:bg-emerald-600"
-				>
-					Clean
-				</button>
-			{/if}
+{/if}
 		</div>
 
 		<div>
-			<div class="flex items-center justify-between mb-2">
+			<div class="mb-2">
 				<span class="text-sm font-medium text-gray-600">Output</span>
-				<button
-					type="button"
-					onclick={copyOutput}
-					class="px-3 py-1 text-sm rounded cursor-pointer border border-gray-300 text-gray-600 hover:bg-gray-100"
-				>
-					Copy
-				</button>
 			</div>
 			<MonacoField value={output} readonly language={outputLang} height="20rem" />
 			{#if meta}
