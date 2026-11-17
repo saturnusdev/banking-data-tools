@@ -1,10 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-    import Icon from "@iconify/svelte";
 	import SafeIcon from '#lib/SafeIcon.svelte';
-    import Toolbar from '#lib/components/editor/Toolbar.svelte';
-    import JsonTree from '#lib/components/editor/JsonTree.svelte';
-    import DiffPanel from '#lib/components/editor/DiffPanel.svelte';
     import JsonToolTabs from '#lib/components/json-tools/JsonToolTabs.svelte';
 
     import { createJsonEditor } from '#lib/plugin/monaco/monaco';
@@ -21,7 +17,7 @@
 		type: 'website'
 	});
 
-	let editorEl: HTMLDivElement;
+	let editorEl!: HTMLDivElement;
 	let editor = $state<any>();
 
 	let tree = $state<TreeNode[]>([]);

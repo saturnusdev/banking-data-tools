@@ -2,7 +2,8 @@ let monaco: any;
 
 export async function createJsonEditor(
     el: HTMLElement,
-    value = '{}'
+    value = '{}',
+    language = 'json'
 ) {
     if (!monaco) {
         monaco = await import('monaco-editor');
@@ -34,7 +35,7 @@ export async function createJsonEditor(
 
     const editor = monaco.editor.create(el, {
         value,
-        language: 'json',
+        language,
         theme: 'vs',
         automaticLayout: true,
         wordWrap: 'on',

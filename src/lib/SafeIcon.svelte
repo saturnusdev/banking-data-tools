@@ -2,7 +2,7 @@
 <script>
 	import Icon from '@iconify/svelte';
 	
-	let { iconName = '', customClass = '', children } = $props();
+	let { iconName = '', customClass = '', children = null } = $props();
 	
 	let hasError = $state(false);
 	

@@ -6,6 +6,7 @@
 	import { cleanJson } from '#lib/json/clean';
 	import { paginateArray } from '#lib/json/paginate';
 	import SafeIcon from '#lib/SafeIcon.svelte';
+	import MonacoField from './MonacoField.svelte';
 
 	type Tab = 'convert' | 'minify' | 'query' | 'schema' | 'mock' | 'paginate' | 'clean';
 
@@ -60,6 +61,20 @@
 	});
 
 	let meta = $state('');
+
+	// Monaco language for the convert input/output depends on the active format.
+	let convertInLang = $derived(
+		convertMode === 'x-to-json' ? (convertFormat === 'yaml' ? 'yaml' : 'plaintext') : 'json'
+	);
+	let outputLang = $derived(
+		activeTab === 'convert'
+			? convertMode === 'json-to-x'
+				? convertFormat === 'yaml'
+					? 'yaml'
+					: 'plaintext'
+				: 'json'
+			: 'json'
+	);
 
 	function setResult(text: string, metaText = '') {
 		output = text;
@@ -216,11 +231,7 @@
 						XML
 					</button>
 				</div>
-				<textarea
-					bind:value={convertInput}
-					class="w-full h-56 font-mono text-sm p-3 border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
-					spellcheck="false"
-				></textarea>
+				<MonacoField bind:value={convertInput} language={convertInLang} height="14rem" />
 				<button
 					type="button"
 					onclick={runConvert}
@@ -230,18 +241,14 @@
 				</button>
 			{:else if activeTab === 'minify'}
 				<div class="mb-2 flex items-center gap-2 text-sm text-gray-600">
-					<label>Indent:</label>
+					<span>Indent:</span>
 					<select bind:value={minifyIndent} class="border border-gray-300 rounded px-2 py-1 text-sm">
 						<option value={0}>0 (minify)</option>
 						<option value={2}>2</option>
 						<option value={4}>4</option>
 					</select>
 				</div>
-				<textarea
-					bind:value={minifyInput}
-					class="w-full h-64 font-mono text-sm p-3 border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
-					spellcheck="false"
-				></textarea>
+				<MonacoField bind:value={minifyInput} language="json" height="16rem" />
 				<button
 					type="button"
 					onclick={runMinify}
@@ -255,11 +262,7 @@
 					placeholder="JSONPath expression, e.g. $.users[?(@.age > 26)].name"
 					class="mb-2 w-full px-3 py-2 text-sm font-mono border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
 				/>
-				<textarea
-					bind:value={queryInput}
-					class="w-full h-56 font-mono text-sm p-3 border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
-					spellcheck="false"
-				></textarea>
+				<MonacoField bind:value={queryInput} language="json" height="14rem" />
 				<button
 					type="button"
 					onclick={runQuery}
@@ -268,11 +271,7 @@
 					Run Query
 				</button>
 			{:else if activeTab === 'schema'}
-				<textarea
-					bind:value={schemaInput}
-					class="w-full h-64 font-mono text-sm p-3 border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
-					spellcheck="false"
-				></textarea>
+				<MonacoField bind:value={schemaInput} language="json" height="16rem" />
 				<button
 					type="button"
 					onclick={runSchema}
@@ -281,11 +280,7 @@
 					Generate Schema
 				</button>
 			{:else if activeTab === 'mock'}
-				<textarea
-					bind:value={mockInput}
-					class="w-full h-64 font-mono text-sm p-3 border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
-					spellcheck="false"
-				></textarea>
+				<MonacoField bind:value={mockInput} language="json" height="16rem" />
 				<button
 					type="button"
 					onclick={runMock}
@@ -304,11 +299,7 @@
 						<input type="number" bind:value={paginatePageSize} min="1" class="w-16 border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
 					</label>
 				</div>
-				<textarea
-					bind:value={paginateInput}
-					class="w-full h-56 font-mono text-sm p-3 border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
-					spellcheck="false"
-				></textarea>
+				<MonacoField bind:value={paginateInput} language="json" height="14rem" />
 				<button
 					type="button"
 					onclick={runPaginate}
@@ -326,11 +317,7 @@
 					<label><input type="checkbox" bind:checked={cleanOpts.dedupeArrays} /> Dedupe arrays</label>
 					<label><input type="checkbox" bind:checked={cleanOpts.trimStrings} /> Trim strings</label>
 				</div>
-				<textarea
-					bind:value={cleanInput}
-					class="w-full h-56 font-mono text-sm p-3 border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
-					spellcheck="false"
-				></textarea>
+				<MonacoField bind:value={cleanInput} language="json" height="14rem" />
 				<button
 					type="button"
 					onclick={runClean}
@@ -352,13 +339,7 @@
 					Copy
 				</button>
 			</div>
-			<textarea
-				bind:value={output}
-				readonly
-				class="w-full h-80 font-mono text-sm p-3 border border-gray-200 rounded-lg bg-gray-50"
-				placeholder="Output appears here"
-				spellcheck="false"
-			></textarea>
+			<MonacoField value={output} readonly language={outputLang} height="20rem" />
 			{#if meta}
 				<div class="text-xs text-gray-500 mt-1">{meta}</div>
 			{/if}

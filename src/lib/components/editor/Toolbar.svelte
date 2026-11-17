@@ -336,13 +336,13 @@
 		try {
 			const parsed = JSON.parse(repaired);
 
-			dispatch('showSuccess', `JSON repaired successfully (${causes.length} fixes)`);
+			onshowsuccess?.(`JSON repaired successfully (${causes.length} fixes)`);
 
 			console.log('Repair causes:', causes);
 
 			return JSON.stringify(parsed, null, 2);
 		} catch (e) {
-			dispatch('showError', 'Unable to fully repair JSON');
+			onshowerror?.('Unable to fully repair JSON');
 			return aggressiveJSONRepair(repaired);
 		}
 	}
