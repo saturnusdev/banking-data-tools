@@ -45,11 +45,11 @@
 		},
 		{
 			id: 5,
-			title: 'ISO8583 Parser',
-			description: 'Parse and analyze ISO8583 financial transaction messages',
-			icon: 'mdi-light:credit-card',
+			title: 'Message ISO 8583 Studio',
+			description: 'Build, decode, validate, and simulate ISO 8583 financial messages',
+			icon: 'mdi:credit-card-outline',
 			color: 'from-teal-500 to-cyan-500',
-            link: '/iso8583-parser'
+            link: '/iso8583-message-studio'
 		},
 		{
 			id: 6,
@@ -70,7 +70,7 @@
 		{
 			id: 8,
 			title: 'Hex to EBCDIC Converter',
-			description: 'Convert between hexadecimal and EBCDIC character encoding',
+			description: 'Convert between Hex, ASCII, EBCDIC, and Base64 codec representations',
 			icon: 'mdi:hexagon-multiple-outline',
 			color: 'from-pink-500 to-rose-500',
             link: '/hex-ebcdic-converter'

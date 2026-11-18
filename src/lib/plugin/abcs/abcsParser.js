@@ -420,6 +420,17 @@ function isNumericType(typeName) {
 		'unsignedLong', 'unsignedInt', 'unsignedShort', 'unsignedByte', 'float', 'double'].includes(t);
 }
 
+/** IBM/DFDL zoned-decimal (DISPLAY) numeric types, e.g. `SIBS-Unsigned-Zoned-Decimal__int`. */
+function isZonedDecimal(typeName) {
+	const t = String(typeName || '').replace(/^xs:/, '').toLowerCase();
+	return t.includes('zoned') || (t.includes('zoned-decimal') || t.includes('zoned_decimal'));
+}
+
+/** True when a decoded text value is a clean JSON number (optional sign, digits, one dot). */
+function isNumericString(text) {
+	return /^[+-]?(\d+\.?\d*|\.\d+)$/.test(String(text || '').trim());
+}
+
 function isBinaryType(typeName) {
 	const t = String(typeName || '').replace(/^xs:/, '').toLowerCase();
 	return (
@@ -482,12 +493,17 @@ function decodePackedDecimal(bytes) {
 function buildNode(el, typeRegistry) {
 	const dfdl = collectDfdlProps(el);
 	const name = getAttr(el, 'name');
-	const typeName = getAttr(el, 'type');
+	// Strip any namespace prefix (xs:, tns:, abcs:, ...) from the type reference so
+	// a named complexType registered under its local name is always found.
+	const typeRef = getAttr(el, 'type');
+	const typeName = typeRef ? typeRef.split(':').pop() : null;
+	const refRef = getAttr(el, 'ref');
+	const refName = refRef ? refRef.split(':').pop() : null;
 
 	const node = {
 		kind: 'element',
-		name: name,
-		typeName: typeName ? typeName.replace(/^xs:/, '') : null,
+		name: name ? name.split(':').pop() : null,
+		typeName,
 		dfdl,
 		minOccurs: parseInt(getAttr(el, 'minOccurs') || '1', 10),
 		maxOccurs: getAttr(el, 'maxOccurs') || null,
@@ -503,10 +519,11 @@ function buildNode(el, typeRegistry) {
 		return node;
 	}
 
-	// Named complexType reference
-	if (typeName && typeRegistry[typeName]) {
+	// Named complexType reference (resolve the referenced element if ref= is used)
+	const resolvedEl = (typeName && typeRegistry[typeName]) || (refName && typeRegistry[refName]);
+	if (resolvedEl) {
 		node.hasComplex = true;
-		node.children = buildComplexChildren(typeRegistry[typeName], typeRegistry);
+		node.children = buildComplexChildren(resolvedEl, typeRegistry);
 		return node;
 	}
 
@@ -573,13 +590,14 @@ export function parseAbcsSchema(xmlText) {
 	const rootTypes = {};
 	const elementRegistry = {};
 
-	// Register named complexType definitions
+	// Register named complexType definitions (strip any namespace prefix so the
+	// local name is the registry key, matching how buildNode resolves type refs).
 	const allElements = doc.getElementsByTagName('*');
 	for (const el of allElements) {
 		const local = el.localName || el.nodeName.split(':').pop();
 		if (local === 'complexType') {
 			const name = getAttr(el, 'name');
-			if (name) typeRegistry[name] = el;
+			if (name) typeRegistry[name.split(':').pop()] = el;
 		}
 	}
 
@@ -590,7 +608,7 @@ export function parseAbcsSchema(xmlText) {
 		const local = el.localName || el.nodeName.split(':').pop();
 		if (local === 'element') {
 			const name = getAttr(el, 'name') || getAttr(el, 'ref');
-			if (name) elementRegistry[name] = el;
+			if (name) elementRegistry[name.split(':').pop()] = el;
 		}
 	}
 
@@ -599,7 +617,7 @@ export function parseAbcsSchema(xmlText) {
 		const local = el.localName || el.nodeName.split(':').pop();
 		if (local === 'element' && el.parentNode === schemaEl) {
 			const name = getAttr(el, 'name');
-			if (name) rootTypes[name] = el;
+			if (name) rootTypes[name.split(':').pop()] = el;
 		}
 	}
 
@@ -681,28 +699,27 @@ export function findHeaderRoots(rootNames, direction) {
 	const norm = n => n.toLowerCase();
 	const isHeader = n => norm(n).includes('header');
 	const isResp = n => /response|resp|rsp|reply/i.test(norm(n));
+	const isReq = n => /request|req|rq/i.test(norm(n));
 
-	let matches;
-	if (direction === 'response') {
-		// Prefer roots that are headers AND response-flavoured (e.g. DSPHeaderResponse).
-		matches = names.filter(n => isHeader(n) && isResp(n));
-		if (!matches.length) matches = names.filter(isHeader);
-	} else {
-		// Request: headers that are NOT response-flavoured (e.g. DSPHeader).
-		matches = names.filter(n => isHeader(n) && !isResp(n));
-		if (!matches.length) matches = names.filter(isHeader);
-	}
+	const all = names.filter(isHeader);
 
 	// Order: DSP layer first, then the ABCS layer, then any other header roots.
-	matches.sort((a, b) => {
+	// Within a layer, prefer the root matching the requested direction.
+	all.sort((a, b) => {
 		const layer = n => (norm(n).includes('dsp') ? 0 : (norm(n).includes('abcs') ? 1 : 2));
 		const la = layer(a);
 		const lb = layer(b);
 		if (la !== lb) return la - lb;
+		const pref = n => (direction === 'response'
+			? (isResp(n) ? 0 : (isReq(n) ? 2 : 1))
+			: (isReq(n) ? 0 : (isResp(n) ? 2 : 1)));
+		const pa = pref(a);
+		const pb = pref(b);
+		if (pa !== pb) return pa - pb;
 		return norm(a).localeCompare(norm(b));
 	});
 
-	return matches;
+	return all;
 }
 
 /**
@@ -783,9 +800,14 @@ export function findFieldValue(json, key) {
  * @returns {{ headerLength: number|null, messageLength: number|null }}
  */
 export function extractHeaderLengths(json) {
+	const dspLength = extractFieldValue(json, 'I13HLEN');
+	const abcsLength = extractFieldValue(json, 'ICLEN');
 	return {
-		headerLength: extractFieldValue(json, 'I13HLEN') ?? extractFieldValue(json, 'ICLEN'),
-		messageLength: extractFieldValue(json, 'I13MLEN')
+		// DSP header length = I13HLEN; ABCS header length = ICLEN.
+		headerLength: dspLength ?? abcsLength,
+		messageLength: extractFieldValue(json, 'I13MLEN'),
+		dspLength,
+		abcsLength
 	};
 }
 
@@ -1025,13 +1047,16 @@ function decodeOne(node, bytes, startOffset, ctx) {
 		value = bytesToHex(valueBytes);
 	} else if (isPackedDecimal(node)) {
 		value = decodePackedDecimal(valueBytes);
-	} else if (isNumericType(node.typeName)) {
+	} else if (isNumericType(node.typeName) || isZonedDecimal(node.typeName)) {
 		const rep = dfdl.representation || dfdl.binaryNumberRep || 'text';
 		if (rep === 'binary') {
 			value = decodeNumber(valueBytes, node, effectiveByteOrder);
 		} else {
 			const text = decodeString(valueBytes, effectiveEncoding);
-			value = applyTrim(text, dfdl);
+			const trimmed = applyTrim(text, dfdl);
+			// Numeric text (e.g. a zoned decimal "000000065") becomes a JSON number
+			// (65). Alphanumeric values (e.g. an ID with letters) remain strings.
+			value = isNumericString(trimmed) ? Number(trimmed) : trimmed;
 		}
 	} else {
 		value = applyTrim(decodeString(valueBytes, effectiveEncoding), dfdl);

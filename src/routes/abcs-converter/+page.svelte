@@ -74,6 +74,30 @@
 		localStorage.setItem('abcs-files', JSON.stringify(storedFiles));
 	}
 
+	// Follow xsd:include / xsd:import schemaLocation references by pulling in matching
+	// files the user has already stored/uploaded (e.g. a Header/Body type defined in a
+	// separate XSD). Returns the full list of schema text contents to parse + merge.
+	function resolveSchemaTexts(texts) {
+		const result = [...texts];
+		const seen = new Set(texts);
+		const queue = [...texts];
+		while (queue.length) {
+			const text = queue.shift();
+			const refs = [...text.matchAll(/<\w*:?(?:include|import)\b[^>]*schemaLocation=["']([^"']+)["']/gi)]
+				.map(m => m[1].split('/').pop())
+				.filter(Boolean);
+			for (const ref of refs) {
+				const file = storedFiles.find(f => f.name.toLowerCase() === ref.toLowerCase());
+				if (file && !seen.has(file.content)) {
+					seen.add(file.content);
+					result.push(file.content);
+					queue.push(file.content);
+				}
+			}
+		}
+		return result;
+	}
+
 	async function storeFile(file) {
 		const fileContent = await file.text();
 		const fileInfo = {
@@ -94,15 +118,15 @@
 	// Extract available root elements (top-level xs:element) from all active schemas
 	function updateAvailableRoots() {
 		try {
-			const texts = schemaTexts.length ? schemaTexts : schemaText ? [schemaText] : [];
+			const texts = resolveSchemaTexts(schemaTexts.length ? schemaTexts : schemaText ? [schemaText] : []);
 			const schemas = texts.map(t => parseAbcsSchema(t));
 			const merged = mergeSchemas(schemas);
-			// List top-level roots and any nested elements as selectable body roots,
-			// but EXCLUDE the header roots (DSPHeader/ABCSHeader and their Response
-			// variants) — they are auto-mapped from the first character, so they must
-			// not appear in the Root Element chooser.
-			availableRoots = [...new Set([...Object.keys(merged.rootTypes || {}), ...Object.keys(merged.elementRegistry || {})])]
-				.filter(r => !/header/i.test(r));
+			// The Root Element chooser lists ONLY the roots defined by the uploaded /
+			// loaded DFDL schema file(s). The header roots (DSPHeader/ABCSHeader and
+			// their Response variants) are omitted — they are auto-mapped from the first
+			// character, so they must not appear as selectable body roots. No other
+			// lists are added, and no request/response string matching is done here.
+			availableRoots = Object.keys(merged.rootTypes || {}).filter(r => !/header/i.test(r));
 			// Auto-select the body root when there's an obvious one (its name contains
 			// "Body", e.g. ABCSBody), so the user doesn't have to pick it manually.
 			if (!rootElement.trim()) {
@@ -243,7 +267,7 @@
 	}
 
 	async function processParsing() {
-		const texts = schemaTexts.length ? schemaTexts : schemaText ? [schemaText] : [];
+		const texts = resolveSchemaTexts(schemaTexts.length ? schemaTexts : schemaText ? [schemaText] : []);
 		if (!texts.length) {
 			error = 'Please upload a DFDL/XSD schema file';
 			return;
@@ -274,11 +298,16 @@
 
 			const isAllSegments = rootElement.trim() === '__ALL__';
 
-			// 4. Map the header chain (ABCS header → DSP header), then parse the body.
+			// 4. Map the header chain (DSP header → ABCS header → ABCS body), then parse
+			// the body. The DSP header starts at the first character; the ABCS header
+			// follows it; the remainder is the ABCS body.
 			let headers = [];
 			let bodyBytes = startBytes;
 
-			// Parse one header root at an offset, reporting its declared length (ICLEN/I13HLEN).
+			// Parse one header root at an offset, reporting its declared length and
+			// signature. The DSP header length comes from I13HLEN (and its fields run
+			// from I13CNBF.SKTHEAD = '*SOKR' to I13RCNM). The ABCS header length comes
+			// from ICLEN and ends with ICEOM = '*EOM'.
 			const parseOneHeader = (hroot, atOffset) => {
 				const tree = buildSchemaTree(schema, hroot);
 				const parsed = parseAbcsBinary(tree, startBytes.subarray(atOffset), {
@@ -287,68 +316,96 @@
 					defaultByteOrder: byteOrder,
 					stripPad: stripPad
 				});
-				const { headerLength } = extractHeaderLengths(parsed.json);
+				const { dspLength, abcsLength } = extractHeaderLengths(parsed.json);
+				// Detect the header type from the PARSED CONTENT (root names may be
+				// generic, e.g. the ABCS header is literally named "Header"): a DSP
+				// header declares I13HLEN; an ABCS header declares ICLEN and ends with
+				// ICEOM. Fall back to name heuristics only if no length field is found.
+				const hasI13 = dspLength != null;
+				const hasIclen = abcsLength != null;
+				const hasIceom = findFieldValue(parsed.json, 'ICEOM') != null;
+				let isDspRoot, isAbcsRoot;
+				if (hasI13 && !hasIclen) { isDspRoot = true; isAbcsRoot = false; }
+				else if (hasIclen || hasIceom) { isDspRoot = false; isAbcsRoot = true; }
+				else {
+					isDspRoot = /dsp/i.test(hroot) || (!/abcs/i.test(hroot) && /header/i.test(hroot));
+					isAbcsRoot = /abcs/i.test(hroot) && !isDspRoot;
+				}
+				// Declared length: DSP header = I13HLEN; ABCS header = ICLEN.
+				const declaredLength = isAbcsRoot ? abcsLength : dspLength;
 				const remaining = startBytes.length - atOffset;
 				const declaredSane =
-					headerLength != null && headerLength > 0 && headerLength <= remaining &&
-					headerLength >= parsed.debug.consumedBytes;
-				// The DSP header always starts at the first character and its
-				// I13CNBF.SKTHEAD is expected to be '*SOKR' (len 5). This signature is
-				// used to validate the direction and to auto-detect request vs response.
-				const isDspRoot = /dsp/i.test(hroot) || (!/abcs/i.test(hroot) && /header/i.test(hroot));
-				const sktheadRaw = isDspRoot ? findFieldValue(parsed.json, 'SKTHEAD') : undefined;
-				const skthead = (sktheadRaw && typeof sktheadRaw === 'object')
-					? (sktheadRaw.value ?? sktheadRaw.text)
-					: sktheadRaw;
-				const signatureOk = !isDspRoot || skthead === '*SOKR';
+					declaredLength != null && declaredLength > 0 && declaredLength <= remaining &&
+					declaredLength >= parsed.debug.consumedBytes;
+				const rawField = (key) => {
+					const raw = findFieldValue(parsed.json, key);
+					return (raw && typeof raw === 'object') ? (raw.value ?? raw.text) : raw;
+				};
+				// Signatures: the DSP header starts with I13CNBF.SKTHEAD = '*SOKR'
+				// (len 5); the ABCS header ends with ICEOM = '*EOM'.
+				const skthead = isDspRoot ? rawField('SKTHEAD') : undefined;
+				const iceom = isAbcsRoot ? rawField('ICEOM') : undefined;
+				const i13rcnm = isDspRoot ? rawField('I13RCNM') : undefined;
+				const signatureOk = isDspRoot
+					? (skthead == null || skthead === '*SOKR')
+					: (isAbcsRoot ? (iceom == null || iceom === '*EOM') : true);
 				return {
 					root: hroot,
 					json: parsed.json,
 					debug: parsed.debug,
 					fields: parsed.fields,
-					declaredLength: headerLength,
+					declaredLength,
 					declaredSane,
 					consumedBytes: parsed.debug.consumedBytes,
 					isDspRoot,
+					isAbcsRoot,
 					skthead,
+					iceom,
+					i13rcnm,
 					signatureOk,
 					length: 0
 				};
 			};
 
-			// Build the header chain from an ordered list of header roots (DSP layer
-			// first, then the ABCS layer). The DSP layer header is mapped first (it
-			// always starts at the first character; I13CNBF.SKTHEAD = '*SOKR', len 5).
-			// The ABCS layer header (ICLEN) is optional and auto-detected: it is only
-			// mapped when its declared ICLEN is sane, so messages without it are fine.
-			const buildChain = (headerRoots) => {
-				const chain = [];
-				for (const root of headerRoots) {
-					const isAbcsLayer = /abcs/i.test(root);
-					if (isAbcsLayer && !mapABCSHeader) continue;
-					chain.push({ root, auto: isAbcsLayer ? true : (messageDirection === 'auto') });
-				}
-				return chain;
-			};
-
+			// Map the header chain: DSP header first, then the ABCS header (ends with
+			// ICEOM = '*EOM'), then the ABCS body is the remainder. The DSP header
+			// starts at the first character. The true length of each header is the
+			// number of bytes the schema consumed (its fields end at the last field,
+			// e.g. I13RCNM for the DSP header and *EOM for the ABCS header). The
+			// I13HLEN / ICLEN length fields are a sanity signal, only authoritative
+			// when they agree with the schema layout. The ABCS header is optional
+			// (gated by the mapABCSHeader checkbox).
 			const runChain = (headerRoots) => {
-				const chain = buildChain(headerRoots);
 				const mapped = [];
 				let cursor = 0;
-				for (const spec of chain) {
+				let dspMapped = false;
+				for (const root of headerRoots) {
 					const remaining = startBytes.length - cursor;
 					if (remaining <= 0) break;
-					const h = parseOneHeader(spec.root, cursor);
-					// Auto-detected headers (DSP header in Auto mode, and the ABCS header)
-					// are skipped when their declared length is not sane, or when the DSP
-					// header's I13CNBF.SKTHEAD is not '*SOKR' (wrong direction). Manually-
-					// selected DSP headers are always mapped. When a header is skipped we
-					// stop the chain, because subsequent headers would otherwise be parsed
-					// at the same (wrong) offset.
-					if (spec.auto && (!h.declaredSane || (h.isDspRoot && !h.signatureOk))) break;
-					h.length = h.declaredSane ? h.declaredLength : h.consumedBytes;
+					const h = parseOneHeader(root, cursor);
+					const auto = h.isAbcsRoot ? true : (messageDirection === 'auto');
+					if (h.isAbcsRoot && !mapABCSHeader) break;
+					// Auto-detected headers are skipped when their declared length is not
+					// sane, or when their signature is wrong (DSP: I13CNBF.SKTHEAD !=
+					// '*SOKR'; ABCS: ICEOM != '*EOM'). If a DSP candidate fails and none
+					// has been mapped yet, try the next DSP candidate at the same offset;
+					// otherwise stop (the ABCS header offset would be unknown).
+					if (auto && (!h.declaredSane || !h.signatureOk)) {
+						if (h.isAbcsRoot || dspMapped) break;
+						continue;
+					}
+					// Header length: the schema-parsed byte count is authoritative (its
+					// fields end at I13RCNM / *EOM). I13HLEN / ICLEN are only used when
+					// they agree with the schema layout (within a small tolerance).
+					const schemaLength = h.consumedBytes;
+					const lengthsAgree = schemaLength > 0 && h.declaredLength != null &&
+						Math.abs(schemaLength - h.declaredLength) <= 4;
+					h.length = lengthsAgree
+						? h.declaredLength
+						: (schemaLength > 0 ? schemaLength : (h.declaredLength || 0));
 					mapped.push(h);
 					cursor += h.length;
+					if (h.isDspRoot) dspMapped = true;
 				}
 				return { headers: mapped, bodyBytes: startBytes.subarray(cursor), cursor };
 			};
@@ -364,19 +421,25 @@
 					const r = runChain(headerRoots);
 					headers = r.headers;
 					bodyBytes = r.bodyBytes;
-					const dsp = headers.find(h => h.isDspRoot);
-					if (dsp && !dsp.signatureOk) {
-						parseWarning = `Mapped DSP header "${dsp.root}" but its I13CNBF.SKTHEAD is ` +
-							`"${dsp.skthead}" (expected "*SOKR", len 5). Double-check the message direction ` +
-							`(Request vs Response) and that the data begins with the DSP header.`;
+					const bad = headers.find(h => !h.signatureOk);
+					if (bad) {
+						if (bad.isDspRoot) {
+							parseWarning = `Mapped DSP header "${bad.root}" but its I13CNBF.SKTHEAD is ` +
+								`"${bad.skthead}" (expected "*SOKR", len 5). Double-check the message direction ` +
+								`(Request vs Response) and that the data begins with the DSP header.`;
+						} else if (bad.isAbcsRoot) {
+							parseWarning = `Mapped ABCS header "${bad.root}" but its ICEOM is ` +
+								`"${bad.iceom}" (expected "*EOM"). Double-check the ABCS header schema and that ` +
+								`the data after the DSP header is an ABCS header.`;
+						}
 					}
 				}
 			} else {
-				// Auto: try request then response. The DSP header always starts at the first
-				// character with I13CNBF.SKTHEAD = '*SOKR', so we prefer the direction whose
-				// DSP header carries that signature.
+				// Auto: the DSP header always starts at the first character with
+				// I13CNBF.SKTHEAD = '*SOKR', so we prefer the direction whose DSP header
+				// carries that signature. Try response first (the common case), then request.
 				let best = null;
-				for (const dir of ['request', 'response']) {
+				for (const dir of ['response', 'request']) {
 					const headerRoots = findHeaderRootsForSchema(schema, dir);
 					if (!headerRoots.length) continue;
 					const r = runChain(headerRoots);
@@ -497,10 +560,19 @@
 			payload = JSON.stringify(combined, null, 2);
 			filename = 'abcs-segments.json';
 		} else {
-			const obj = results.mode === 'header+single'
-				? { ...headerBlock, body: results.json }
+			// Flatten the mapped header chain + body into a single object:
+			// { DSPHeaderResponse: {...}, Header: {...}, Body: {...} }.
+			const flat = results.mode === 'header+single'
+				? {
+						...Object.fromEntries(results.headers.map(h => {
+							const value = h.json && typeof h.json === 'object' ? h.json : {};
+							const key = h.root;
+							return [key, value[key] ?? value];
+						})),
+						...(results.json || {})
+					}
 				: results.json;
-			payload = JSON.stringify(obj, null, 2);
+			payload = JSON.stringify(flat, null, 2);
 			filename = `${results.rootElement.toLowerCase()}-abcs.json`;
 		}
 		const blob = new Blob([payload], { type: 'application/json' });
@@ -1229,6 +1301,11 @@
 													{#if h.isDspRoot}
 														<span class="ml-2 {h.signatureOk ? 'text-green-600' : 'text-red-500 font-semibold'}">
 															SKTHEAD = {JSON.stringify(h.skthead)}{h.signatureOk ? ' ✓' : ' ✗ (expected *SOKR)'}
+														</span>
+														{#if h.i13rcnm != null}<span class="ml-2 text-gray-400">→ I13RCNM = {JSON.stringify(h.i13rcnm)}</span>{/if}
+													{:else if h.isAbcsRoot}
+														<span class="ml-2 {h.signatureOk ? 'text-green-600' : 'text-red-500 font-semibold'}">
+															ICEOM = {JSON.stringify(h.iceom)}{h.signatureOk ? ' ✓' : ' ✗ (expected *EOM)'}
 														</span>
 													{/if}
 												</div>

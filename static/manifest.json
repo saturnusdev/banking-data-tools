@@ -56,10 +56,10 @@
       ]
     },
     {
-      "name": "ISO8583 Parser",
-      "short_name": "ISO8583",
-      "description": "Parse financial transaction messages",
-      "url": "/iso8583-parser",
+      "name": "Message ISO 8583 Studio",
+      "short_name": "ISO 8583 Studio",
+      "description": "Build, decode, validate, and simulate ISO 8583 financial messages",
+      "url": "/iso8583-message-studio",
       "icons": [
         {
           "src": "/favicon.svg",

@@ -1,226 +1,87 @@
 <script>
 	import Icon from '@iconify/svelte';
 	import { page } from '$app/state';
+	import {
+		bytesToHex,
+		bytesToBase64,
+		bytesToAscii,
+		bytesToEbcdic,
+		asciiToEbcdicHex,
+		asciiToEbcdicBytes,
+		asciiToBytes,
+		hexToBytes,
+		base64ToBytes
+	} from '#lib/plugin/iso8583/codec';
 
 	let inputData = $state('');
 	let outputData = $state('');
-	let conversionMode = $state('hexToEbcdic'); // 'hexToEbcdic' or 'ebcdicToHex'
+	let conversionMode = $state('hexToEbcdic');
 	let error = $state('');
 
-	// Check for hex parameter in URL
+	const codecModes = [
+		{ id: 'hexToEbcdic', label: 'Hex → EBCDIC', icon: 'mdi-light:hexadecimal', input: 'hex' },
+		{ id: 'ebcdicToHex', label: 'EBCDIC → Hex', icon: 'mdi-light:alphabetical', input: 'text' },
+		{ id: 'hexToAscii', label: 'Hex → ASCII', icon: 'mdi-light:hexadecimal', input: 'hex' },
+		{ id: 'asciiToHex', label: 'ASCII → Hex', icon: 'mdi-light:alphabetical', input: 'text' },
+		{ id: 'base64ToHex', label: 'Base64 → Hex', icon: 'mdi-light:lock-open', input: 'base64' },
+		{ id: 'hexToBase64', label: 'Hex → Base64', icon: 'mdi-light:hexadecimal', input: 'hex' },
+		{ id: 'asciiToEbcdic', label: 'ASCII → EBCDIC', icon: 'mdi-light:alphabetical', input: 'text' }
+	];
+
+	const currentMode = $derived(codecModes.find((m) => m.id === conversionMode) || codecModes[0]);
+
 	$effect(() => {
 		if (page.url.searchParams.has('hex')) {
 			const hexParam = page.url.searchParams.get('hex');
 			if (hexParam) {
 				inputData = hexParam;
 				conversionMode = 'hexToEbcdic';
-				// Auto-convert
 				convert();
 			}
 		}
 	});
 
-	// Converted from your original switch statement
-	const ebcdicMap = {
-		'00': '<NUL>',
-		'01': '<SOH>',
-		'02': '<STX>',
-		'03': '<ETX>',
-		'04': '<SEL>',
-		'05': '<HT>',
-		'06': '<RNL>',
-		'07': '<DEL>',
-		'08': '<GE>',
-		'09': '<SPS>',
-		'0A': '<RPT>',
-		'0B': '<VT>',
-		'0C': '<FF>',
-		'0D': String.fromCharCode(13),
-		'0E': '<SO>',
-		'0F': '<SI>',
-
-		'40': ' ',
-
-		'4A': '[',
-		'4B': '.',
-		'4C': '<',
-		'4D': '(',
-		'4E': '+',
-		'4F': '!',
-
-		'50': '&',
-
-		'5A': ']',
-		'5B': '$',
-		'5C': '*',
-		'5D': ')',
-		'5E': ';',
-		'5F': '^',
-
-		'60': '_',
-		'61': '/',
-
-		'6A': '|',
-		'6B': ',',
-		'6C': '%',
-		'6D': '_',
-		'6E': '>',
-		'6F': '?',
-
-		'79': '`',
-		'7A': ':',
-		'7B': '#',
-		'7C': '@',
-		'7D': "'",
-		'7E': '=',
-		'7F': '"',
-
-		// lowercase
-		'81': 'a',
-		'82': 'b',
-		'83': 'c',
-		'84': 'd',
-		'85': 'e',
-		'86': 'f',
-		'87': 'g',
-		'88': 'h',
-		'89': 'i',
-
-		'91': 'j',
-		'92': 'k',
-		'93': 'l',
-		'94': 'm',
-		'95': 'n',
-		'96': 'o',
-		'97': 'p',
-		'98': 'q',
-		'99': 'r',
-
-		'A1': '~',
-		'A2': 's',
-		'A3': 't',
-		'A4': 'u',
-		'A5': 'v',
-		'A6': 'w',
-		'A7': 'x',
-		'A8': 'y',
-		'A9': 'z',
-
-		// uppercase
-		'C0': '{',
-		'C1': 'A',
-		'C2': 'B',
-		'C3': 'C',
-		'C4': 'D',
-		'C5': 'E',
-		'C6': 'F',
-		'C7': 'G',
-		'C8': 'H',
-		'C9': 'I',
-
-		'D0': '}',
-		'D1': 'J',
-		'D2': 'K',
-		'D3': 'L',
-		'D4': 'M',
-		'D5': 'N',
-		'D6': 'O',
-		'D7': 'P',
-		'D8': 'Q',
-		'D9': 'R',
-
-		'E0': '\\',
-		'E2': 'S',
-		'E3': 'T',
-		'E4': 'U',
-		'E5': 'V',
-		'E6': 'W',
-		'E7': 'X',
-		'E8': 'Y',
-		'E9': 'Z',
-
-		// digits
-		'F0': '0',
-		'F1': '1',
-		'F2': '2',
-		'F3': '3',
-		'F4': '4',
-		'F5': '5',
-		'F6': '6',
-		'F7': '7',
-		'F8': '8',
-		'F9': '9'
-	};
-
-	const asciiToEbcdic = {};
-
-	Object.entries(ebcdicMap).forEach(([hex, value]) => {
-		if (value.length === 1) {
-			asciiToEbcdic[value] = hex;
-		}
-	});
-
-	function hexToEbcdic() {
-		try {
-			error = '';
-
-			let cleanHex = inputData
-				.replace(/\s/g, '')
-				.toUpperCase();
-
-			if (!/^[0-9A-F]*$/.test(cleanHex)) {
-				throw new Error('Invalid hex input');
-			}
-
-			if (cleanHex.length % 2 !== 0) {
-				throw new Error('Hex length must be even');
-			}
-
-			let result = '';
-
-			for (let i = 0; i < cleanHex.length; i += 2) {
-				const byte = cleanHex.substring(i, i + 2);
-
-				result += ebcdicMap[byte] ?? '.';
-			}
-
-			outputData = result;
-		} catch (e) {
-			error = e.message;
-		}
-	}
-
-	function ebcdicToHex() {
-		try {
-			error = '';
-
-			let result = '';
-
-			for (const char of inputData) {
-				result += asciiToEbcdic[char] ?? '00';
-			}
-
-			outputData = result;
-		} catch (e) {
-			error = e.message;
-		}
-	}
-
 	function convert() {
-		if (!inputData.trim()) {
-			error = 'Please enter data';
-			return;
-		}
-
-		if (conversionMode === 'hexToEbcdic') {
-			hexToEbcdic();
-		} else {
-			ebcdicToHex();
+		try {
+			error = '';
+			const input = inputData.trim();
+			if (!input) {
+				outputData = '';
+				return;
+			}
+			switch (conversionMode) {
+				case 'hexToEbcdic':
+					outputData = bytesToEbcdic(hexToBytes(input));
+					break;
+				case 'ebcdicToHex':
+					outputData = bytesToHex(asciiToEbcdicBytes(input));
+					break;
+				case 'hexToAscii':
+					outputData = bytesToAscii(hexToBytes(input));
+					break;
+				case 'asciiToHex':
+					outputData = bytesToHex(asciiToBytes(input));
+					break;
+				case 'base64ToHex':
+					outputData = bytesToHex(base64ToBytes(input));
+					break;
+				case 'hexToBase64':
+					outputData = bytesToBase64(hexToBytes(input));
+					break;
+				case 'asciiToEbcdic':
+					outputData = asciiToEbcdicHex(input);
+					break;
+				default:
+					outputData = '';
+			}
+		} catch (e) {
+			error = e.message;
+			outputData = '';
 		}
 	}
 
 	function copyToClipboard() {
-		navigator.clipboard.writeText(outputData);
+		if (outputData) navigator.clipboard.writeText(outputData);
 	}
 
 	function clearAll() {
@@ -230,13 +91,23 @@
 	}
 
 	function swapConversion() {
-		// Swap input and output
 		const temp = inputData;
 		inputData = outputData;
 		outputData = temp;
-		
-		// Swap conversion mode
-		conversionMode = conversionMode === 'hexToEbcdic' ? 'ebcdicToHex' : 'hexToEbcdic';
+	}
+
+	function inputPlaceholder() {
+		if (currentMode.input === 'hex') return 'Enter hexadecimal values (e.g., 48656C6C6F20576F726C64)...';
+		if (currentMode.input === 'base64') return 'Enter Base64 encoded data...';
+		return 'Enter text to convert...';
+	}
+
+	function inputLabel() {
+		return currentMode.label.split('→')[0].trim();
+	}
+
+	function outputLabel() {
+		return currentMode.label.split('→')[1].trim();
 	}
 </script>
 
@@ -248,9 +119,7 @@
 				<div class="flex items-center space-x-4">
 					<button
 						class="group rounded-full p-2 text-purple-600 transition-all hover:bg-purple-100 hover:scale-110"
-						onclick={() => {
-							location.href = '/';
-						}}
+						onclick={() => (location.href = '/')}
 					>
 						<Icon icon="mdi-light:arrow-left" class="h-6 w-6 transition-transform group-hover:-translate-x-1" />
 					</button>
@@ -263,7 +132,7 @@
 								Hex to EBCDIC Converter
 							</h1>
 							<p class="text-gray-600 mt-1">
-								Convert between hexadecimal and EBCDIC character encoding formats
+								Convert between Hex, ASCII, EBCDIC, and Base64 representations
 							</p>
 						</div>
 					</div>
@@ -286,7 +155,7 @@
 					<button
 						onclick={swapConversion}
 						class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
-						title="Swap input/output and conversion mode"
+						title="Swap input and output"
 					>
 						<span class="relative z-10 flex items-center space-x-2">
 							<Icon icon="mdi-light:swap-horizontal" class="h-4 w-4" />
@@ -296,44 +165,28 @@
 				</div>
 			</div>
 			<div class="p-6">
-				<div class="flex justify-center">
-					<div class="inline-flex rounded-xl bg-gray-100 p-1">
+				<div class="flex flex-wrap gap-2">
+					{#each codecModes as mode}
 						<button
-							onclick={() => conversionMode = 'hexToEbcdic'}
-							class="rounded-lg px-6 py-3 text-sm font-medium transition-all {conversionMode === 'hexToEbcdic'
-								? 'bg-white text-pink-600 shadow-md'
-								: 'text-gray-600 hover:text-gray-800'}"
+							onclick={() => { conversionMode = mode.id; convert(); }}
+							class="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all {conversionMode === mode.id
+								? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md'
+								: 'bg-gray-100 text-gray-600 hover:bg-gray-200'}"
 						>
-							<span class="flex items-center space-x-2">
-								<Icon icon="mdi-light:hexadecimal" class="h-4 w-4" />
-								<span>Hex → EBCDIC</span>
-							</span>
+							<Icon icon={mode.icon} class="h-4 w-4" />
+							{mode.label}
 						</button>
-						<button
-							onclick={() => conversionMode = 'ebcdicToHex'}
-							class="rounded-lg px-6 py-3 text-sm font-medium transition-all {conversionMode === 'ebcdicToHex'
-								? 'bg-white text-pink-600 shadow-md'
-								: 'text-gray-600 hover:text-gray-800'}"
-						>
-							<span class="flex items-center space-x-2">
-								<Icon icon="mdi-light:alphabetical" class="h-4 w-4" />
-								<span>EBCDIC → Hex</span>
-							</span>
-						</button>
-					</div>
+					{/each}
 				</div>
 			</div>
 		</section>
-
 		<!-- Input Section -->
 		<section class="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
 			<div class="bg-gradient-to-r from-gray-700 to-gray-900 p-6">
 				<div class="flex items-center justify-between">
 					<div class="flex items-center space-x-3">
 						<Icon icon="mdi-light:file-document-edit" class="h-6 w-6 text-white" />
-						<h2 class="text-xl font-bold text-white">
-							{conversionMode === 'hexToEbcdic' ? 'Hex Input' : 'EBCDIC Input'}
-						</h2>
+						<h2 class="text-xl font-bold text-white">{inputLabel()} Input</h2>
 					</div>
 					<div class="flex space-x-3">
 						<button
@@ -360,9 +213,8 @@
 			<div class="p-6">
 				<textarea
 					bind:value={inputData}
-					placeholder={conversionMode === 'hexToEbcdic' 
-						? 'Enter hexadecimal values (e.g., 48656C6C6F20576F726C64)...' 
-						: 'Enter EBCDIC encoded text...'}
+					oninput={convert}
+					placeholder={inputPlaceholder()}
 					class="w-full h-40 rounded-xl border-2 border-gray-200 p-4 font-mono text-sm transition-all focus:border-pink-400 focus:ring-4 focus:ring-pink-100 resize-none"
 				></textarea>
 			</div>
@@ -374,9 +226,7 @@
 				<div class="flex items-center justify-between">
 					<div class="flex items-center space-x-3">
 						<Icon icon="mdi-light:check-circle" class="h-6 w-6 text-white" />
-						<h2 class="text-xl font-bold text-white">
-							{conversionMode === 'hexToEbcdic' ? 'EBCDIC Output' : 'Hex Output'}
-						</h2>
+						<h2 class="text-xl font-bold text-white">{outputLabel()} Output</h2>
 					</div>
 					<button
 						onclick={copyToClipboard}
@@ -385,8 +235,8 @@
 						<span class="relative z-10 flex items-center space-x-2">
 							<Icon icon="mdi-light:content-copy" class="h-4 w-4" />
 							<span>Copy</span>
-							</span>
-						</button>
+						</span>
+					</button>
 				</div>
 			</div>
 			<div class="p-6">
@@ -398,7 +248,6 @@
 				></textarea>
 			</div>
 		</section>
-
 		<!-- Error Display -->
 		{#if error}
 			<section class="bg-gradient-to-r from-red-50 to-rose-50 rounded-2xl shadow-xl border border-red-100 overflow-hidden">
@@ -424,13 +273,13 @@
 			<div class="bg-gradient-to-r from-blue-500 to-cyan-500 p-6">
 				<div class="flex items-center space-x-3">
 					<Icon icon="mdi-light:information" class="h-6 w-6 text-white" />
-					<h2 class="text-xl font-bold text-white">About EBCDIC</h2>
+					<h2 class="text-xl font-bold text-white">About Codec Conversions</h2>
 				</div>
 			</div>
 			<div class="p-6 space-y-6">
 				<div class="bg-white/50 backdrop-blur-sm rounded-xl p-6 border border-blue-200">
 					<p class="text-blue-800 leading-relaxed">
-						<strong class="text-blue-900">EBCDIC</strong> (Extended Binary Coded Decimal Interchange Code) is an 8-bit character encoding used mainly on IBM mainframe systems.
+						<strong class="text-blue-900">EBCDIC</strong> (Extended Binary Coded Decimal Interchange Code) is an 8-bit character encoding used mainly on IBM mainframe systems. These codec helpers convert between hexadecimal, ASCII, EBCDIC, and Base64 representations — useful when working with ISO 8583 and mainframe financial messages.
 					</p>
 				</div>
 				<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -439,19 +288,19 @@
 							<div class="rounded-full bg-blue-100 p-2">
 								<Icon icon="mdi-light:hexadecimal" class="h-5 w-5 text-blue-600" />
 							</div>
-							<h3 class="font-bold text-blue-800">Hex to EBCDIC</h3>
+							<h3 class="font-bold text-blue-800">Hex ↔ EBCDIC</h3>
 						</div>
 						<div class="space-y-3">
 							{#each [
 								'Converts hex values to their EBCDIC character equivalents',
-								'Supports common EBCDIC character mappings',
-								'Auto-pads odd-length hex input'
+								'Supports common EBCDIC (IBM037) character mappings',
+								'EBCDIC input is converted to its hex representation'
 							] as feature}
-							<div class="flex items-start space-x-3">
-								<Icon icon="mdi-light:check-circle" class="h-4 w-4 text-blue-600 mt-0.5" />
-								<p class="text-sm text-blue-700">{feature}</p>
-							</div>
-						{/each}
+								<div class="flex items-start space-x-3">
+									<Icon icon="mdi-light:check-circle" class="h-4 w-4 text-blue-600 mt-0.5" />
+									<p class="text-sm text-blue-700">{feature}</p>
+								</div>
+							{/each}
 						</div>
 					</div>
 					<div class="bg-white/50 backdrop-blur-sm rounded-xl p-6 border border-blue-200">
@@ -459,19 +308,19 @@
 							<div class="rounded-full bg-blue-100 p-2">
 								<Icon icon="mdi-light:alphabetical" class="h-5 w-5 text-blue-600" />
 							</div>
-							<h3 class="font-bold text-blue-800">EBCDIC to Hex</h3>
+							<h3 class="font-bold text-blue-800">Hex ↔ ASCII ↔ Base64</h3>
 						</div>
 						<div class="space-y-3">
 							{#each [
-								'Converts EBCDIC characters back to hex representation',
-								'Uses standard EBCDIC to ASCII conversion table',
-								'Unknown characters default to 0x00'
+								'Converts between hex and printable ASCII text',
+								'Base64 encode / decode to and from hex',
+								'ASCII text to EBCDIC hex conversion'
 							] as feature}
-							<div class="flex items-start space-x-3">
-								<Icon icon="mdi-light:check-circle" class="h-4 w-4 text-blue-600 mt-0.5" />
-								<p class="text-sm text-blue-700">{feature}</p>
-							</div>
-						{/each}
+								<div class="flex items-start space-x-3">
+									<Icon icon="mdi-light:check-circle" class="h-4 w-4 text-blue-600 mt-0.5" />
+									<p class="text-sm text-blue-700">{feature}</p>
+								</div>
+							{/each}
 						</div>
 					</div>
 				</div>
