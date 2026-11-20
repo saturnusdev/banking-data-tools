@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xsd:schema xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" xmlns:fmt="http://www.ibm.com/dfdl/GeneralPurposeFormat" xmlns:ibmDfdlExtn="http://www.ibm.com/dfdl/extensions" xmlns:ibmSchExtn="http://www.ibm.com/schema/extensions" xmlns:ref="http://www.ibm.com/dfdl/RecordFixLengthFieldFormat" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <xsd:include schemaLocation="ABCSHeader.xsd"/>
+    <xsd:include schemaLocation="DataTypes.xsd"/>
+    <xsd:import namespace="http://www.ibm.com/dfdl/RecordFixLengthFieldFormat" schemaLocation="IBMdefined/RecordFixLengthFieldFormat.xsd"/>
+    <xsd:element dfdl:lengthKind="implicit" name="ABCSErrorRes">
+        <xsd:complexType>
+            <xsd:sequence>
+                <xsd:element dfdl:lengthKind="implicit" name="Header" type="ABCSHeaderType"/>
+                <xsd:element dfdl:lengthKind="implicit" name="Body" type="ABCSErrorBodyType"/>
+            </xsd:sequence>
+        </xsd:complexType>
+    </xsd:element>
+    <xsd:complexType name="ABCSErrorBodyType">
+        <xsd:sequence>
+            <xsd:element dfdl:lengthKind="implicit" name="ErrorHeader">
+                <xsd:complexType>
+                    <xsd:sequence>
+                        <xsd:element dfdl:length="2" name="RSPLEN" type="SIBS-Packed-Decimal__int"/>
+                        <xsd:element dfdl:length="2" name="RSPCOD" type="SIBS-General-Text__string"/>
+                        <xsd:element dfdl:length="10" name="TLTXCD" type="SIBS-General-Text__string"/>
+                        <xsd:element dfdl:length="3" name="TLXMNE" type="SIBS-General-Text__string"/>
+                        <xsd:element dfdl:length="5" name="TLBSEQ" type="SIBS-Packed-Decimal__int"/>
+                        <xsd:element dfdl:length="10" name="TLBID" type="SIBS-General-Text__string"/>
+                        <xsd:element dfdl:length="7" name="TLBCUD" type="SIBS-General-Text__string"/>
+                        <xsd:element dfdl:length="10" name="TLBWS" type="SIBS-General-Text__string"/>
+                        <xsd:element dfdl:length="1" name="HOVREQ" type="SIBS-General-Text__string"/>
+                        <xsd:element dfdl:length="2" name="ER" type="SIBS-Packed-Decimal__int"/>
+                    </xsd:sequence>
+                </xsd:complexType>
+            </xsd:element>
+            <xsd:element dfdl:lengthKind="implicit" dfdl:occursCountKind="implicit" maxOccurs="unbounded" name="ErrorBody">
+                <xsd:complexType>
+                    <xsd:sequence>
+                        <xsd:element dfdl:length="2" name="RSPLEN" type="SIBS-Packed-Decimal__int"/>
+                        <xsd:element dfdl:length="2" name="RSPCOD" type="SIBS-General-Text__string"/>
+                        <xsd:element dfdl:length="2" name="ERN1" type="SIBS-Packed-Decimal__int"/>
+                        <xsd:element dfdl:length="1" name="ERO1" type="SIBS-General-Text__string"/>
+                        <xsd:element dfdl:length="2" name="APL1" type="SIBS-Packed-Decimal__int"/>
+                        <xsd:element dfdl:length="1" name="APT1" type="SIBS-General-Text__string"/>
+                        <xsd:element dfdl:length="1" name="ADT1" type="SIBS-General-Text__string"/>
+                        <xsd:element dfdl:length="19" name="ADF1" type="SIBS-General-Text__string"/>
+                        <xsd:element dfdl:length="3" name="AEC1" type="SIBS-General-Text__string"/>
+                        <xsd:element dfdl:length="2" name="VAPP" type="SIBS-General-Text__string"/>
+                        <xsd:element dfdl:length="2" ibmDfdlExtn:sampleValue="0" name="VSCD" type="SIBS-Packed-Decimal__int"/>
+                        <xsd:element dfdl:length="60" name="VMSG" type="SIBS-General-Text__string"/>
+                        <xsd:element dfdl:length="17" dfdl:textNumberPattern="00000000000000000+" ibmDfdlExtn:sampleValue="2" name="AVAILB" type="SIBS-Signed-Zoned-Decimal__int"/>
+                    </xsd:sequence>
+                </xsd:complexType>
+            </xsd:element>
+        </xsd:sequence>
+    </xsd:complexType>
+    <xsd:annotation>
+        <xsd:appinfo source="http://www.ogf.org/dfdl/">
+            <dfdl:format ref="ref:RecordFixLengthFieldsFormat"/>
+        </xsd:appinfo>
+    </xsd:annotation>
+</xsd:schema>

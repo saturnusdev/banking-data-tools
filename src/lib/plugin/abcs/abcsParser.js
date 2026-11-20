@@ -17,6 +17,83 @@
  */
 
 /* ------------------------------------------------------------------ */
+/* Built-in schema registry                                            */
+/*                                                                     */
+/* All XSD files shipped with the project are pre-loaded here so the   */
+/* parser never needs manual file uploads to resolve xsd:include /     */
+/* xsd:import references. User-uploaded schemas are merged on top and  */
+/* override these when names collide.                                  */
+/* ------------------------------------------------------------------ */
+
+import recordFixLengthFieldFormatXsd from './recordFixLengthFieldFormat.xsd?raw';
+import dataTypeXsd from './dataType.xsd?raw';
+import headerXsd from './header.xsd?raw';
+import dspHeaderXsd from './dspHeader.xsd?raw';
+import errorXsd from './error.xsd?raw';
+import generalPurposeFormatXsd from './generalPurposeFormat.xsd?raw';
+
+/**
+ * Built-in schema files keyed by every alias they may be referenced as
+ * (from xsd:include schemaLocation="..."). All lookups are case-insensitive.
+ * The aliases cover both the actual file names and the IBM source names used
+ * in the schemaLocation attributes of the shipped XSD files.
+ */
+export const BUILTIN_SCHEMAS = {
+	// RecordFixLengthFieldFormat — referenced as "IBMdefined/RecordFixLengthFieldFormat.xsd"
+	'recordfixlengthfieldformat.xsd': recordFixLengthFieldFormatXsd,
+	// DataTypes — file is dataType.xsd, referenced as DataTypes.xsd / dataType.xsd
+	'datatypes.xsd': dataTypeXsd,
+	'datatype.xsd': dataTypeXsd,
+	// ABCS header — file is header.xsd, referenced as ABCSHeader.xsd / header.xsd
+	'abcsheader.xsd': headerXsd,
+	'header.xsd': headerXsd,
+	// DSP header — file is dspHeader.xsd, referenced as DSPHeader.xsd / dspHeader.xsd
+	'dspheader.xsd': dspHeaderXsd,
+	'dspheaderresponse.xsd': dspHeaderXsd,
+	// ABCS error body — file is error.xsd, referenced as ABCSError.xsd / error.xsd
+	'abcserror.xsd': errorXsd,
+	'error.xsd': errorXsd,
+	// General purpose format (IBM)
+	'generalpurposeformat.xsd': generalPurposeFormatXsd,
+};
+
+/**
+ * Resolve all xsd:include/xsd:import schemaLocation references in a list of
+ * schema texts, pulling in built-in schemas automatically and supplementing
+ * with any user-supplied extras (keyed by filename, case-insensitive).
+ *
+ * @param {string[]} texts - initial schema texts
+ * @param {Record<string,string>} [userSchemas] - extra schemas from localStorage
+ * @returns {string[]} full list of schema texts with all includes resolved
+ */
+export function resolveAllIncludes(texts, userSchemas = {}) {
+	const result = [...texts];
+	const seen = new Set(texts);
+	const queue = [...texts];
+
+	// Merge built-in + user schemas into one lookup (user overrides built-in)
+	const allAvailable = { ...BUILTIN_SCHEMAS };
+	for (const [name, content] of Object.entries(userSchemas)) {
+		allAvailable[name.toLowerCase()] = content;
+	}
+
+	while (queue.length) {
+		const text = queue.shift();
+		const refs = [...text.matchAll(/<[^>]*:?(?:include|import)\b[^>]*schemaLocation=["']([^"']+)["']/gi)]
+			.map(m => m[1].split('/').pop().toLowerCase())
+			.filter(Boolean);
+		for (const ref of refs) {
+			const content = allAvailable[ref];
+			if (content && !seen.has(content)) {
+				seen.add(content);
+				result.push(content);
+				queue.push(content);
+			}
+		}
+	}
+	return result;
+}
+/* ------------------------------------------------------------------ */
 /* EBCDIC (CP037) -> ASCII conversion table                            */
 /* ------------------------------------------------------------------ */
 
@@ -581,8 +658,12 @@ export function parseAbcsSchema(xmlText) {
 	const parser = new DOMParser();
 	const doc = parser.parseFromString(xmlText, 'text/xml');
 
-	if (doc.getElementsByTagName('parsererror').length > 0) {
-		throw new Error('Invalid XML format in schema file');
+	const parseErrors = doc.getElementsByTagName('parsererror');
+	if (parseErrors.length > 0) {
+		const detail = parseErrors[0].textContent || '';
+		// Extract just the first meaningful line to keep the message short
+		const firstLine = detail.split('\n').find(l => l.trim()) || detail;
+		throw new Error(`Invalid XML in schema file: ${firstLine.trim().slice(0, 200)}`);
 	}
 
 	const schemaEl = doc.documentElement;
@@ -590,9 +671,20 @@ export function parseAbcsSchema(xmlText) {
 	const rootTypes = {};
 	const elementRegistry = {};
 
+	// Collect all xsd:include / xsd:import schemaLocation references so the
+	// caller can warn about missing files.
+	const includes = [];
+	const allElements = doc.getElementsByTagName('*');
+	for (const el of allElements) {
+		const local = el.localName || el.nodeName.split(':').pop();
+		if (local === 'include' || local === 'import') {
+			const loc = getAttr(el, 'schemaLocation');
+			if (loc) includes.push(loc.split('/').pop());
+		}
+	}
+
 	// Register named complexType definitions (strip any namespace prefix so the
 	// local name is the registry key, matching how buildNode resolves type refs).
-	const allElements = doc.getElementsByTagName('*');
 	for (const el of allElements) {
 		const local = el.localName || el.nodeName.split(':').pop();
 		if (local === 'complexType') {
@@ -621,7 +713,7 @@ export function parseAbcsSchema(xmlText) {
 		}
 	}
 
-	return { rootTypes, typeRegistry, elementRegistry, schemaEl };
+	return { rootTypes, typeRegistry, elementRegistry, schemaEl, includes };
 }
 
 /**
@@ -636,19 +728,54 @@ export function mergeSchemas(schemas) {
 	const rootTypes = {};
 	const typeRegistry = {};
 	const elementRegistry = {};
+	const includes = [];
 	let schemaEl = null;
 	for (const s of schemas || []) {
 		if (!s) continue;
 		Object.assign(rootTypes, s.rootTypes || {});
 		Object.assign(typeRegistry, s.typeRegistry || {});
 		Object.assign(elementRegistry, s.elementRegistry || {});
+		if (s.includes) includes.push(...s.includes);
 		if (!schemaEl && s.schemaEl) schemaEl = s.schemaEl;
 	}
-	return { rootTypes, typeRegistry, elementRegistry, schemaEl };
+	return { rootTypes, typeRegistry, elementRegistry, schemaEl, includes };
 }
 
 /**
- * Find the root element that represents the message header for a given direction.
+ * Scan all xs:element type= references in the loaded schema texts and return
+ * the ones whose complexType is NOT found in typeRegistry. These are the types
+ * that come from xsd:include/xsd:import files that haven't been uploaded yet.
+ *
+ * @param {string[]} schemaTexts
+ * @param {{typeRegistry: object}} mergedSchema
+ * @returns {{ typeName: string, elementName: string }[]}
+ */
+export function collectMissingTypes(schemaTexts, mergedSchema) {
+	const missing = [];
+	const seen = new Set();
+	const parser = new DOMParser();
+	for (const text of schemaTexts || []) {
+		let doc;
+		try { doc = parser.parseFromString(text, 'text/xml'); } catch (e) { continue; }
+		for (const el of doc.getElementsByTagName('*')) {
+			const local = el.localName || el.nodeName.split(':').pop();
+			if (local !== 'element') continue;
+			const typeRef = el.getAttribute('type') || '';
+			if (!typeRef) continue;
+			const typeName = typeRef.split(':').pop();
+			// Only flag types that look like named complexTypes (not xs: primitives)
+			if (!typeName || typeName.startsWith('xs:') || typeName === 'string' || typeName === 'integer' || typeName === 'decimal') continue;
+			if (mergedSchema.typeRegistry[typeName]) continue;
+			if (seen.has(typeName)) continue;
+			seen.add(typeName);
+			const elemName = el.getAttribute('name') || '(unknown)';
+			missing.push({ typeName, elementName: elemName.split(':').pop() });
+		}
+	}
+	return missing;
+}
+
+/**
  *
  * Request  -> prefers an exact `DSPHeader`, else a name containing "Header"
  *             but not "Response" (e.g. `DSPHeader`, `RequestHeader`).

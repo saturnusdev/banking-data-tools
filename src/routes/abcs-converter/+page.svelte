@@ -14,7 +14,10 @@
 		findFieldValue,
 		detectTextEncoding,
 		hexToBytes,
-		base64ToBytes
+		base64ToBytes,
+		collectMissingTypes,
+		resolveAllIncludes,
+		BUILTIN_SCHEMAS
 	} from '#lib/plugin/abcs/abcsParser.js';
 
 	// Form state
@@ -45,6 +48,26 @@
 	let parseWarning = '';
 	let detectedMarkers = [];
 	let flatFields = [];
+	let missingTypes = []; // unresolved xs:complexType refs (from xsd:include not uploaded)
+
+	// Reactively detect which xsd:include/xsd:import files from the active schema
+	// set are not yet stored in localStorage.
+	$: missingIncludes = (() => {
+		if (!schemaTexts.length && !schemaText) return [];
+		const texts = schemaTexts.length ? schemaTexts : [schemaText];
+		const allRefs = new Set();
+		for (const text of texts) {
+			for (const m of text.matchAll(/<[^>]*:?(?:include|import)\b[^>]*schemaLocation=["']([^"']+)["']/gi)) {
+				allRefs.add(m[1].split('/').pop().toLowerCase());
+			}
+		}
+		// Resolved = present in built-in registry OR stored by user
+		const resolved = new Set([
+			...Object.keys(BUILTIN_SCHEMAS),
+			...storedFiles.map(f => f.name.toLowerCase())
+		]);
+		return [...allRefs].filter(ref => !resolved.has(ref));
+	})();
 
 	// Mode helpers (a header-mapped result is still a segments/single result underneath)
 	$: isSegmentsMode = !!results && (results['mode'] === 'segments' || results['mode'] === 'header+segments');
@@ -76,26 +99,13 @@
 
 	// Follow xsd:include / xsd:import schemaLocation references by pulling in matching
 	// files the user has already stored/uploaded (e.g. a Header/Body type defined in a
-	// separate XSD). Returns the full list of schema text contents to parse + merge.
+	// separate XSD). Built-in schemas (shipped with the project) are always resolved
+	// automatically via resolveAllIncludes; stored files supplement or override them.
 	function resolveSchemaTexts(texts) {
-		const result = [...texts];
-		const seen = new Set(texts);
-		const queue = [...texts];
-		while (queue.length) {
-			const text = queue.shift();
-			const refs = [...text.matchAll(/<\w*:?(?:include|import)\b[^>]*schemaLocation=["']([^"']+)["']/gi)]
-				.map(m => m[1].split('/').pop())
-				.filter(Boolean);
-			for (const ref of refs) {
-				const file = storedFiles.find(f => f.name.toLowerCase() === ref.toLowerCase());
-				if (file && !seen.has(file.content)) {
-					seen.add(file.content);
-					result.push(file.content);
-					queue.push(file.content);
-				}
-			}
-		}
-		return result;
+		const userSchemas = Object.fromEntries(
+			storedFiles.map(f => [f.name.toLowerCase(), f.content])
+		);
+		return resolveAllIncludes(texts, userSchemas);
 	}
 
 	async function storeFile(file) {
@@ -115,26 +125,42 @@
 		return fileInfo;
 	}
 
-	// Extract available root elements (top-level xs:element) from all active schemas
+	// Extract available root elements (top-level xs:element) from all active schemas.
+	// Roots come ONLY from the user-uploaded texts (schemaTexts / schemaText).
+	// Built-in schemas (resolved via resolveSchemaTexts) are used for type resolution
+	// only — they never contribute root elements to the dropdown.
 	function updateAvailableRoots() {
 		try {
-			const texts = resolveSchemaTexts(schemaTexts.length ? schemaTexts : schemaText ? [schemaText] : []);
-			const schemas = texts.map(t => parseAbcsSchema(t));
-			const merged = mergeSchemas(schemas);
-			// The Root Element chooser lists ONLY the roots defined by the uploaded /
-			// loaded DFDL schema file(s). The header roots (DSPHeader/ABCSHeader and
-			// their Response variants) are omitted — they are auto-mapped from the first
-			// character, so they must not appear as selectable body roots. No other
-			// lists are added, and no request/response string matching is done here.
-			availableRoots = Object.keys(merged.rootTypes || {}).filter(r => !/header/i.test(r));
-			// Auto-select the body root when there's an obvious one (its name contains
-			// "Body", e.g. ABCSBody), so the user doesn't have to pick it manually.
+			const uploadedTexts = schemaTexts.length ? schemaTexts : schemaText ? [schemaText] : [];
+			if (!uploadedTexts.length) {
+				availableRoots = [];
+				return;
+			}
+			// Parse only the uploaded texts to get their root elements.
+			// Parse each separately so one bad schema doesn't kill the rest.
+			const uploadedSchemas = uploadedTexts.flatMap(t => {
+				try { return [parseAbcsSchema(t)]; } catch (e) {
+					error = `Schema parse error: ${e.message}`;
+					return [];
+				}
+			});
+			const uploadedMerged = mergeSchemas(uploadedSchemas);
+			availableRoots = Object.keys(uploadedMerged.rootTypes || {});
+			// Auto-select the first non-header body root
 			if (!rootElement.trim()) {
-				const bodyRoot = availableRoots.find(r => /body/i.test(r));
+				const bodyRoot =
+					availableRoots.find(r => /body/i.test(r)) ||
+					availableRoots.find(r => !/header/i.test(r));
 				if (bodyRoot) rootElement = bodyRoot;
+			}
+			if (!availableRoots.length) {
+				error = 'No root elements found in the schema. Check that xs:element is a direct child of xs:schema.';
+			} else {
+				error = '';
 			}
 		} catch (e) {
 			availableRoots = [];
+			error = `Schema load error: ${e.message || e}`;
 		}
 	}
 
@@ -284,10 +310,41 @@
 		detectedMarkers = [];
 		results = null;
 		flatFields = [];
+		missingTypes = [];
 
 		try {
-			// 1. Merge all active schemas (header + body) into one
-			const schema = mergeSchemas(texts.map(t => parseAbcsSchema(t)));
+			// 1. Merge all active schemas (header + body) into one.
+			// Parse each schema text individually so a bad included file doesn't crash the whole merge.
+			const parseErrors = [];
+			const schema = mergeSchemas(texts.map(t => {
+				try { return parseAbcsSchema(t); }
+				catch (e) { parseErrors.push(e.message); return null; }
+			}).filter(Boolean));
+			if (parseErrors.length) {
+				parseWarning = `Schema parse warning(s): ${parseErrors.slice(0, 3).join(' | ')}`;
+			}
+
+			// Check for unresolved type references (xsd:include files not uploaded)
+			missingTypes = collectMissingTypes(texts, schema);
+			if (missingTypes.length) {
+				const names = [...new Set(missingTypes.map(m => m.typeName))].slice(0, 6).join(', ');
+				const fileRefs = [...new Set(schema.includes || [])];
+				// A file is resolved if it's in BUILTIN_SCHEMAS OR in user-uploaded storedFiles
+				const missing = fileRefs.filter(f => {
+					const lc = f.toLowerCase();
+					return !BUILTIN_SCHEMAS[lc] && !storedFiles.some(s => s.name.toLowerCase() === lc);
+				});
+				if (missing.length) {
+					parseWarning = `Missing included schema file(s): ${missing.join(', ')}. ` +
+						`Upload them and they will be auto-merged. Unresolved types: ${names}. ` +
+						`Fields using these types will decode as raw text instead of structured fields.`;
+				}
+				// If all includes are resolved but types still missing, the merge failed silently
+				else if (parseErrors.length === 0) {
+					// Types should have resolved — no warning needed, parsing will proceed
+					missingTypes = [];
+				}
+			}
 
 			// 2. Resolve binary input
 			const bytes = await resolveInputBytes();
@@ -636,7 +693,16 @@
 			lines.push(results.debug.ebcdicView);
 			lines.push(``);
 			lines.push(`JSON:`);
-			lines.push(JSON.stringify(results.json, null, 2));
+			const debugJson = results.mode === 'header+single' && results.headers && results.headers.length
+				? {
+						...Object.fromEntries(results.headers.map(h => {
+							const value = h.json && typeof h.json === 'object' ? h.json : {};
+							return [h.root, value[h.root] ?? value];
+						})),
+						...(results.json || {})
+					}
+				: results.json;
+			lines.push(JSON.stringify(debugJson, null, 2));
 		lines.push(`FIELDS:`);
 		(flatFields || []).forEach(f =>
 			lines.push(`  ${f.path.padEnd(40)} value=${f.value}  xsdLength=${f.xsdLength ?? '—'}  valueLength=${f.valueLength ?? '—'}`)
@@ -679,6 +745,7 @@
 		parseWarning = '';
 		detectedMarkers = [];
 		flatFields = [];
+		missingTypes = [];
 		selectedStoredFile = '';
 	}
 </script>
@@ -837,6 +904,27 @@
 					{/if}
 				</div>
 
+				<!-- Missing Includes Warning -->
+				{#if missingIncludes.length}
+					<div class="p-4 bg-gradient-to-r from-orange-50 to-red-50 rounded-xl border-2 border-orange-300">
+						<div class="flex items-start space-x-3">
+							<Icon icon="mdi:file-alert-outline" class="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
+							<div>
+								<p class="text-orange-900 font-semibold text-sm">Schema dependencies not uploaded:</p>
+								<div class="flex flex-wrap gap-2 mt-2">
+									{#each missingIncludes as f}
+										<span class="font-mono text-xs bg-red-100 text-red-700 border border-red-300 px-2 py-1 rounded">{f}</span>
+									{/each}
+								</div>
+								<p class="text-orange-800 text-xs mt-2">
+									Upload these files using the file input above — they will be auto-merged when converting.
+									Without them, fields typed with definitions from these files will decode as raw text.
+								</p>
+							</div>
+						</div>
+					</div>
+				{/if}
+
 				<!-- Root Element -->
 				<div>
 					<label for="root-element" class="block text-sm font-medium text-gray-700 mb-2">
@@ -856,11 +944,11 @@
 					</select>
 					<p class="mt-2 text-xs text-gray-500">
 						{#if availableRoots.length > 0}
-							Auto-detected from the loaded schema; header roots (<code class="font-mono bg-gray-100 px-1 rounded">DSPHeader</code>/<code class="font-mono bg-gray-100 px-1 rounded">ABCSHeader</code>)
-							are omitted here because they are auto-mapped from the first character. Equivalent to daffodil's
-							<code class="font-mono bg-gray-100 px-1 rounded">--root</code> option.
+							Auto-detected from the uploaded schema. Header roots (DSPHeader / ABCSHeader) are
+							auto-mapped from the message front. Select the body root, e.g.
+							<code class="font-mono bg-gray-100 px-1 rounded">ABCSErrorRes</code>.
 						{:else}
-							Upload a schema file to auto-populate the available root elements (e.g. ABCSBody).
+							Upload a schema file to populate the root elements.
 						{/if}
 					</p>
 				</div>
@@ -1202,6 +1290,59 @@
 		{/if}
 
 
+		<!-- Missing Types / Included Schemas Warning -->
+		{#if missingTypes.length}
+			<section class="bg-gradient-to-r from-orange-50 to-red-50 rounded-2xl shadow-xl border border-orange-200 overflow-hidden">
+				<div class="bg-gradient-to-r from-orange-500 to-red-500 p-4">
+					<div class="flex items-center space-x-3">
+						<Icon icon="mdi:file-alert-outline" class="h-5 w-5 text-white" />
+						<h3 class="text-lg font-bold text-white">Missing Schema Dependencies</h3>
+					</div>
+				</div>
+				<div class="p-6 space-y-3">
+					<p class="text-orange-900 font-medium">
+						The loaded schema references types that were not found. This usually means the
+						<code class="font-mono bg-orange-100 px-1 rounded">xsd:include</code> /
+						<code class="font-mono bg-orange-100 px-1 rounded">xsd:import</code> files haven't been uploaded yet.
+						Upload each missing file — it will be auto-merged with the active schema.
+					</p>
+					<div class="bg-white rounded-xl border border-orange-200 overflow-hidden">
+						<table class="w-full text-sm">
+							<thead class="bg-orange-50">
+								<tr>
+									<th class="px-4 py-2 text-left text-xs font-semibold text-orange-700 uppercase">Field</th>
+									<th class="px-4 py-2 text-left text-xs font-semibold text-orange-700 uppercase">Missing Type</th>
+									<th class="px-4 py-2 text-left text-xs font-semibold text-orange-700 uppercase">Effect</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-orange-100">
+								{#each missingTypes.slice(0, 20) as mt}
+									<tr class="hover:bg-orange-50">
+										<td class="px-4 py-2 font-mono text-gray-700">{mt.elementName}</td>
+										<td class="px-4 py-2 font-mono text-red-600 font-semibold">{mt.typeName}</td>
+										<td class="px-4 py-2 text-gray-500 text-xs">decoded as raw string</td>
+									</tr>
+								{/each}
+								{#if missingTypes.length > 20}
+									<tr>
+										<td colspan="3" class="px-4 py-2 text-xs text-gray-400 italic">
+											…and {missingTypes.length - 20} more
+										</td>
+									</tr>
+								{/if}
+							</tbody>
+						</table>
+					</div>
+					<p class="text-xs text-orange-700 mt-1">
+						For this schema (<code class="font-mono bg-orange-100 px-1 rounded">ABCSError.xsd</code>), upload and store:
+						<strong>ABCSHeader.xsd</strong>, <strong>DataTypes.xsd</strong>, and a DSP header schema
+						(<strong>DSPHeader.xsd</strong> / <strong>DSPHeaderResponse.xsd</strong>), then click
+						<em>Auto (header + body)</em> to merge them all before converting.
+					</p>
+				</div>
+			</section>
+		{/if}
+
 		<!-- Results Section -->
 		{#if results}
 			<section class="bg-white rounded-2xl shadow-xl border border-indigo-100 overflow-hidden">
@@ -1382,7 +1523,17 @@
 								<Icon icon="mdi:code-json" class="h-5 w-5 text-indigo-600" />
 								<span>JSON Infoset</span>
 							</h3>
-							<pre class="text-xs bg-gray-50 p-4 rounded border-b border-gray-200 overflow-x-auto max-h-96 overflow-y-auto font-mono whitespace-pre">{JSON.stringify(results.json, null, 2)}</pre>
+							<pre class="text-xs bg-gray-50 p-4 rounded border-b border-gray-200 overflow-x-auto max-h-96 overflow-y-auto font-mono whitespace-pre">{JSON.stringify(
+								results.mode === 'header+single' && results.headers && results.headers.length
+									? {
+											...Object.fromEntries(results.headers.map(h => {
+												const value = h.json && typeof h.json === 'object' ? h.json : {};
+												return [h.root, value[h.root] ?? value];
+											})),
+											...(results.json || {})
+										}
+									: results.json,
+								null, 2)}</pre>
 						</div>
 					{/if}
 
