@@ -16,7 +16,7 @@ Allow: /iso8583-parser
 Allow: /iso8583-message-studio
 Allow: /dfdl-parser
 Allow: /base64-decoder
-Allow: /yaml-to-json
+Allow: /yaml-tools
 Allow: /js-minify
 Allow: /hex-ebcdic-converter
 Allow: /fixed-length-parsed
