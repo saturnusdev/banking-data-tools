@@ -180,22 +180,22 @@
 				<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 					{#if mode === 'yaml-to-json'}
 						<div>
-							<!-- svelte-ignore a11y_label_has_associated_control -->
-							<label class="block text-sm font-medium text-gray-700 mb-2">
+							<label for="yaml-input" class="block text-sm font-medium text-gray-700 mb-2">
 								YAML Input
 							</label>
 							<textarea
+								id="yaml-input"
 								bind:value={yamlText}
 								placeholder="Enter YAML/OpenAPI content here..."
 								class="w-full h-96 rounded-xl border-2 border-gray-200 p-4 font-mono text-sm transition-all focus:border-green-400 focus:ring-4 focus:ring-green-100 resize-none"
 							></textarea>
 						</div>
 						<div>
-							<!-- svelte-ignore a11y_label_has_associated_control -->
-							<label class="block text-sm font-medium text-gray-700 mb-2">
+							<label for="json-output" class="block text-sm font-medium text-gray-700 mb-2">
 								JSON Output
 							</label>
 							<textarea
+								id="json-output"
 								bind:value={jsonText}
 								placeholder="JSON output will appear here..."
 								readonly
@@ -204,22 +204,22 @@
 						</div>
 					{:else}
 						<div>
-							<!-- svelte-ignore a11y_label_has_associated_control -->
-							<label class="block text-sm font-medium text-gray-700 mb-2">
+							<label for="json-input" class="block text-sm font-medium text-gray-700 mb-2">
 								JSON Input
 							</label>
 							<textarea
+								id="json-input"
 								bind:value={jsonText}
 								placeholder="Enter JSON content here..."
 								class="w-full h-96 rounded-xl border-2 border-gray-200 p-4 font-mono text-sm transition-all focus:border-green-400 focus:ring-4 focus:ring-green-100 resize-none"
 							></textarea>
 						</div>
 						<div>
-							<!-- svelte-ignore a11y_label_has_associated_control -->
-							<label class="block text-sm font-medium text-gray-700 mb-2">
+							<label for="yaml-output" class="block text-sm font-medium text-gray-700 mb-2">
 								YAML Output
 							</label>
 							<textarea
+								id="yaml-output"
 								bind:value={yamlText}
 								placeholder="YAML output will appear here..."
 								readonly

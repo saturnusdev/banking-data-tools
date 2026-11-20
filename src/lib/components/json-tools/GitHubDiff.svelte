@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { diffLines } from 'diff';
 
-	let { oldText = '', newText = '' } = $props();
+	let { oldText = '', newText = '', unitLabel = 'JSON' }: { oldText?: string; newText?: string; unitLabel?: string } =
+		$props();
 
 	type RowType = 'add' | 'del' | 'context';
 	interface Row {
@@ -57,7 +58,9 @@
 	{#if rows.length === 0}
 		<div class="px-4 py-8 text-center text-sm text-gray-400">Click Compare to see the diff.</div>
 	{:else if !hasChanges}
-		<div class="px-4 py-8 text-center text-sm text-gray-400">No differences — the two JSON documents are identical.</div>
+		<div class="px-4 py-8 text-center text-sm text-gray-400">
+			No differences — the two {unitLabel} documents are identical.
+		</div>
 	{:else}
 		<div class="max-h-[20rem] overflow-auto text-[12px] leading-5 font-mono">
 			{#each rows as row}

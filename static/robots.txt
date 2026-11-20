@@ -21,6 +21,7 @@ Allow: /js-minify
 Allow: /hex-ebcdic-converter
 Allow: /fixed-length-parsed
 Allow: /idm-swagger
+Allow: /xml-editor
 
 # Crawl delay for respectful crawling
 Crawl-delay: 1

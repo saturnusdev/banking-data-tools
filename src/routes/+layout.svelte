@@ -127,7 +127,8 @@
 				"YAML to JSON Converter",
 				"JavaScript Minifier",
 				"Hex to EBCDIC Converter",
-				"Fixed-Length Data Parser"
+				"Fixed-Length Data Parser",
+				"XML Editor"
 			]
 		}
 	</script>

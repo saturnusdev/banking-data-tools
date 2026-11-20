@@ -6,8 +6,10 @@
 		value = $bindable(''),
 		readonly = false,
 		language = 'json',
-		height = '14rem'
-	}: { value?: string; readonly?: boolean; language?: string; height?: string } = $props();
+		height = '14rem',
+		id,
+		ariaLabel
+	}: { value?: string; readonly?: boolean; language?: string; height?: string; id?: string; ariaLabel?: string } = $props();
 
 	let el: HTMLDivElement;
 	let editor: any;
@@ -37,7 +39,11 @@
 </script>
 
 <div
+	{id}
 	bind:this={el}
+	role="textbox"
+	aria-label={ariaLabel}
+	aria-multiline="true"
 	class="w-full overflow-hidden rounded-lg border border-gray-200 bg-white"
 	style="height: {height};"
 ></div>

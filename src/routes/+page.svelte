@@ -76,6 +76,14 @@
             link: '/hex-ebcdic-converter'
 		},
 		{
+			id: 9,
+			title: 'XML Editor',
+			description: 'Format, validate, and convert XML to JSON, fixed-width, CSV, and entity escaping',
+			icon: 'mdi:file-xml-box',
+			color: 'from-orange-500 to-amber-500',
+            link: '/xml-editor'
+		},
+		{
 			id: 10,
 			title: 'Base64 Auto-Detect & Decoder',
 			description: 'Automatically detect and decode various data formats',

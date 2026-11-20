@@ -66,6 +66,18 @@
           "sizes": "any"
         }
       ]
+    },
+    {
+      "name": "XML Editor",
+      "short_name": "XML",
+      "description": "Format, validate, and convert XML documents",
+      "url": "/xml-editor",
+      "icons": [
+        {
+          "src": "/favicon.svg",
+          "sizes": "any"
+        }
+      ]
     }
   ],
   "share_target": {
