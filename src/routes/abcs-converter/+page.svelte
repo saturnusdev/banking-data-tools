@@ -392,8 +392,7 @@
 				const declaredLength = isAbcsRoot ? abcsLength : dspLength;
 				const remaining = startBytes.length - atOffset;
 				const declaredSane =
-					declaredLength != null && declaredLength > 0 && declaredLength <= remaining &&
-					declaredLength >= parsed.debug.consumedBytes;
+					declaredLength != null && declaredLength > 0 && declaredLength <= remaining;
 				const rawField = (key) => {
 					const raw = findFieldValue(parsed.json, key);
 					return (raw && typeof raw === 'object') ? (raw.value ?? raw.text) : raw;
@@ -455,9 +454,11 @@
 					// fields end at I13RCNM / *EOM). I13HLEN / ICLEN are only used when
 					// they agree with the schema layout (within a small tolerance).
 					const schemaLength = h.consumedBytes;
-					const lengthsAgree = schemaLength > 0 && h.declaredLength != null &&
-						Math.abs(schemaLength - h.declaredLength) <= 4;
-					h.length = lengthsAgree
+					// The declared header length (I13HLEN / ICLEN) is authoritative for the
+					// header boundary when sane — it is the true end of the header even when
+					// the schema also declares optional trailing fields (which the parser may
+					// or may not have consumed). Fall back to the schema-parsed byte count.
+					h.length = h.declaredSane
 						? h.declaredLength
 						: (schemaLength > 0 ? schemaLength : (h.declaredLength || 0));
 					mapped.push(h);

@@ -592,7 +592,9 @@ function buildNode(el, typeRegistry) {
 	const inlineComplex = childByLocalName(el, 'complexType');
 	if (inlineComplex) {
 		node.hasComplex = true;
-		node.children = buildComplexChildren(inlineComplex, typeRegistry);
+		const built = buildComplexChildren(inlineComplex, typeRegistry);
+		node.children = built.children;
+		node.choices = built.choices;
 		return node;
 	}
 
@@ -600,7 +602,9 @@ function buildNode(el, typeRegistry) {
 	const resolvedEl = (typeName && typeRegistry[typeName]) || (refName && typeRegistry[refName]);
 	if (resolvedEl) {
 		node.hasComplex = true;
-		node.children = buildComplexChildren(resolvedEl, typeRegistry);
+		const built = buildComplexChildren(resolvedEl, typeRegistry);
+		node.children = built.children;
+		node.choices = built.choices;
 		return node;
 	}
 
@@ -611,12 +615,28 @@ function buildNode(el, typeRegistry) {
 
 function buildComplexChildren(complexType, typeRegistry) {
 	const children = [];
+	// choiceId -> { id, branches: [ [node, ...], ... ] }. A choice's branches are kept
+	// as explicit groups so the decoder can try each branch and skip the unchosen ones.
+	const choices = {};
 
 	const localNameOf = (el) => el.localName || (el.nodeName || '').split(':').pop();
 
+	// Recursively collect the element nodes that make up one choice branch. A branch
+	// may be a lone element or a sequence/choice/all of elements.
+	const collectBranchElements = (branchEl, out) => {
+		const l = localNameOf(branchEl);
+		if (l === 'element') {
+			out.push(buildNode(branchEl, typeRegistry));
+			return;
+		}
+		for (const c of branchEl.children || []) collectBranchElements(c, out);
+	};
+
 	// Walk a model group's children in document order, recursing into xsd:sequence /
 	// xsd:choice / xsd:all regardless of nesting (e.g. choice inside sequence), so the
-	// decode step can honour choice (first branch only) while keeping fields aligned.
+	// decode step can honour a choice (one branch only) while keeping fields aligned.
+	// Every element of a choice branch is tagged with a shared choiceId + branch index
+	// so the decoder can skip the unchosen branches.
 	const collectGroup = (container) => {
 		for (const child of container.children || []) {
 			const local = localNameOf(child);
@@ -625,14 +645,24 @@ function buildComplexChildren(complexType, typeRegistry) {
 				built.group = 'sequence';
 				children.push(built);
 			} else if (local === 'choice') {
-				for (const elem of childrenByLocalName(child, 'element')) {
-					const built = buildNode(elem, typeRegistry);
-					built.group = 'choice';
-					children.push(built);
+				const choiceId = `c${Object.keys(choices).length}`;
+				const branches = [];
+				for (const branchChild of child.children || []) {
+					const bLocal = localNameOf(branchChild);
+					if (bLocal === 'element' || bLocal === 'sequence' || bLocal === 'choice' || bLocal === 'all') {
+						const branchElems = [];
+						collectBranchElements(branchChild, branchElems);
+						const branchIndex = branches.length;
+						branchElems.forEach((b) => {
+							b.group = 'choice';
+							b.choiceId = choiceId;
+							b.branchIndex = branchIndex;
+						});
+						branches.push(branchElems);
+						children.push(...branchElems);
+					}
 				}
-				for (const innerSeq of childrenByLocalName(child, 'sequence')) {
-					collectGroup(innerSeq);
-				}
+				choices[choiceId] = { id: choiceId, branches };
 			} else if (local === 'all') {
 				for (const elem of childrenByLocalName(child, 'element')) {
 					const built = buildNode(elem, typeRegistry);
@@ -646,7 +676,7 @@ function buildComplexChildren(complexType, typeRegistry) {
 	};
 
 	collectGroup(complexType);
-	return children;
+	return { children, choices };
 }
 
 /**
@@ -1091,20 +1121,30 @@ function decodeOne(node, bytes, startOffset, ctx) {
 			if (match) offset += initBytes.length;
 		}
 		const obj = {};
-		// xsd:choice: only the first matching branch is decoded (Daffodil tries branches in
-		// document order and picks the first that parses); skip the remaining siblings of a
-		// contiguous choice group so the following fields stay aligned.
-		let inChoice = false;
-		for (const child of node.children) {
-			if (child.group === 'choice') {
-				if (inChoice) continue;
-				inChoice = true;
-			} else {
-				inChoice = false;
+		const choices = node.choices || {};
+		const children = node.children || [];
+		// xsd:choice: try each branch in document order and pick the first one that fully
+		// parses within the remaining bytes (Daffodil semantics), then skip the rest of
+		// the choice group so the following fields stay aligned. The chosen branch's
+		// fields are merged into obj so the resulting JSON is flat (as Daffodil does).
+		let i = 0;
+		while (i < children.length) {
+			const child = children[i];
+			if (child.group === 'choice' && child.choiceId != null) {
+				const choice = choices[child.choiceId];
+				const res = choice ? pickChoiceBranch(choice, bytes, offset, childCtx) : null;
+				if (res) {
+					Object.assign(obj, res.values);
+					offset = res.nextOffset;
+				}
+				const cid = child.choiceId;
+				while (i < children.length && children[i].group === 'choice' && children[i].choiceId === cid) i++;
+				continue;
 			}
 			const decoded = decodeNode(child, bytes, offset, childCtx);
 			obj[child.name] = decoded.value;
 			offset = decoded.nextOffset;
+			i++;
 		}
 		return { value: obj, nextOffset: offset };
 	}
@@ -1145,6 +1185,13 @@ function decodeOne(node, bytes, startOffset, ctx) {
 			: lengthUnits === 'bits'
 				? Math.ceil(length / 8)
 				: length;
+
+	// Optional fields (minOccurs="0") that would run past the end of the buffer are
+	// treated as absent so a trailing optional field never consumes bytes that do not
+	// exist. Required fields always decode (best effort) so nothing is silently lost.
+	if (node.minOccurs === 0 && valueOffset + byteLength > bytes.length) {
+		return { value: undefined, nextOffset: offset, absent: true };
+	}
 
 	let raw = bytes.subarray(valueOffset, valueOffset + byteLength);
 	let valueBytes = raw;
@@ -1190,6 +1237,67 @@ function decodeOne(node, bytes, startOffset, ctx) {
 	}
 
 	return { value, nextOffset: offset, raw: raw, valueBytes: valueBytes };
+}
+
+/**
+ * Decode one branch of an xsd:choice. Returns { viable, values, nextOffset }.
+ * A branch is viable when every element fits inside the remaining buffer (no
+ * element reads past the end of the data).
+ */
+function tryChoiceBranch(branch, bytes, offset, ctx) {
+	const values = {};
+	let o = offset;
+	for (const el of branch) {
+		const decoded = decodeNode(el, bytes, o, ctx);
+		if (decoded.nextOffset > bytes.length) return { viable: false, values: {}, nextOffset: o };
+		values[el.name] = decoded.value;
+		o = decoded.nextOffset;
+	}
+	return { viable: true, values, nextOffset: o };
+}
+
+/**
+ * Try each branch of an xsd:choice in document order and return the selected one
+ * following Daffodil semantics:
+ *   1. Branches whose first element carries an initiator are discriminated — the
+ *      first branch whose initiator matches the bytes at the current offset wins.
+ *   2. If no branch is discriminated, the first branch that fully parses within the
+ *      remaining buffer wins (Daffodil's default "first successful branch").
+ *   3. Falls back to the first branch so the choice is never silently dropped.
+ *
+ * @param {{branches: Array<Array<object>>}} choice
+ * @returns {{branchIndex:number, values:object, nextOffset:number}|null}
+ */
+function pickChoiceBranch(choice, bytes, offset, ctx) {
+	const branches = (choice && choice.branches) || [];
+	const enc = ctx.detectedEncoding || ctx.defaultEncoding || 'ASCII';
+
+	// Pass 1: initiator-discriminated branches. A branch whose first element has an
+	// initiator (e.g. a segment code) is only selected when that initiator matches.
+	for (let b = 0; b < branches.length; b++) {
+		const branch = branches[b];
+		const first = branch[0];
+		const init = first && first.dfdl && (first.dfdl.initiator || first.dfdl.init);
+		if (!init) continue;
+		const initBytes = encodeString(init, enc);
+		let match = true;
+		for (let k = 0; k < initBytes.length; k++) {
+			if (bytes[offset + k] !== initBytes[k]) { match = false; break; }
+		}
+		if (!match) continue;
+		const r = tryChoiceBranch(branch, bytes, offset, ctx);
+		if (r.viable) return { branchIndex: b, values: r.values, nextOffset: r.nextOffset };
+	}
+
+	// Pass 2: no discriminator present/matched — first viable branch.
+	for (let b = 0; b < branches.length; b++) {
+		const r = tryChoiceBranch(branches[b], bytes, offset, ctx);
+		if (r.viable) return { branchIndex: b, values: r.values, nextOffset: r.nextOffset };
+	}
+
+	// Fallback: first branch, best effort (do not silently lose the choice).
+	const r = tryChoiceBranch(branches[0] || [], bytes, offset, ctx);
+	return { branchIndex: 0, values: r.values, nextOffset: r.nextOffset };
 }
 
 function decodeNode(node, bytes, offset, ctx) {
@@ -1468,6 +1576,10 @@ export function flattenWithSchema(json, schemaTree) {
 		for (const child of children || []) {
 			const path = prefix ? `${prefix}.${child.name}` : child.name;
 			const value = obj ? obj[child.name] : undefined;
+
+			// Skip schema children that were not decoded (unchosen choice branches,
+			// absent optional fields) so the flat view does not show phantom fields.
+			if (value === undefined) continue;
 
 			if (child.hasComplex) {
 				if (Array.isArray(value)) {
