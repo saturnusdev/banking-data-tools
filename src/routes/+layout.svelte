@@ -3,21 +3,12 @@
 	import favicon from '#lib/assets/favicon.svg';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { getSeoForPath } from '#lib/seo/config.js';
 
 	let { children } = $props();
 
-	// SEO metadata
-	const seoMeta = $derived({
-		title: 'Banking Data Tools - Professional Data Processing Suite',
-		description:
-			'Professional data processing tools for developers and data analysts. JSON tools, ISO8583 parser, DFDL parser, Base64 decoder, and more.',
-		keywords:
-			'JSON tools, data parser, ISO8583, DFDL, Base64 decoder, banking data, data processing, developer tools',
-		author: 'Hady Eka Saputra',
-		image: '/og-image.png',
-		url: `https://www.banking-tools.java-sc.com${page.url.pathname}`,
-		type: 'website'
-	});
+	// Route-aware SEO metadata — automatically uses optimized meta per page
+	const seoMeta = $derived(getSeoForPath(page.url.pathname));
 
 	// Global error handling for Iconify/Svelte issues
 	function handleIconifyError(event) {
@@ -105,14 +96,14 @@
 	<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 	<meta name="apple-mobile-web-app-title" content="Banking Data Tools" />
 
-	<!-- Structured Data (JSON-LD) -->
+	<!-- Structured Data (JSON-LD) — route-aware -->
 	<script type="application/ld+json">
 		{
 			"@context": "https://schema.org",
 			"@type": "WebApplication",
-			"name": "Banking Data Tools",
-			"description": "Professional data processing tools for developers and data analysts",
-			"url": "https://www.banking-tools.java-sc.com",
+			"name": {seoMeta.title},
+			"description": {seoMeta.description},
+			"url": {seoMeta.url},
 			"author": {
 				"@type": "Person",
 				"name": "Hady Eka Saputra"
@@ -133,7 +124,30 @@
 				"JavaScript Minifier",
 				"Hex to EBCDIC Converter",
 				"Fixed-Length Data Parser",
-				"XML Editor"
+				"XML Editor",
+				"ABCS Converter",
+				"IDM to Swagger Converter"
+			]
+		}
+	</script>
+	<!-- Breadcrumb structured data -->
+	<script type="application/ld+json">
+		{
+			"@context": "https://schema.org",
+			"@type": "BreadcrumbList",
+			"itemListElement": [
+				{
+					"@type": "ListItem",
+					"position": 1,
+					"name": "Home",
+					"item": "https://www.banking-tools.java-sc.com/"
+				},
+				{
+					"@type": "ListItem",
+					"position": 2,
+					"name": {seoMeta.title},
+					"item": {seoMeta.url}
+				}
 			]
 		}
 	</script>
