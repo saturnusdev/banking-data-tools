@@ -10,11 +10,21 @@
 	import MonacoField from './MonacoField.svelte';
 	import GitHubDiff from './GitHubDiff.svelte';
 
-	type Tab = 'convert' | 'minify' | 'query' | 'schema' | 'mock' | 'paginate' | 'clean' | 'compare';
+	type Tab =
+		| 'convert'
+		| 'minify'
+		| 'stringify'
+		| 'query'
+		| 'schema'
+		| 'mock'
+		| 'paginate'
+		| 'clean'
+		| 'compare';
 
 	const tabs: { id: Tab; label: string; icon: string }[] = [
 		{ id: 'convert', label: 'Convert', icon: 'mdi:swap-horizontal' },
 		{ id: 'minify', label: 'Minify', icon: 'mdi:compress' },
+		{ id: 'stringify', label: 'Stringify', icon: 'mdi:format-text' },
 		{ id: 'query', label: 'JSONPath', icon: 'mdi:magnify' },
 		{ id: 'schema', label: 'Schema', icon: 'mdi:file-code-outline' },
 		{ id: 'mock', label: 'Mock', icon: 'mdi:auto-fix' },
@@ -35,6 +45,11 @@
 	// Minify
 	let minifyInput = $state('{\n  "name": "John Doe",\n  "age": 30\n}');
 	let minifyIndent = $state(0);
+
+	// Stringify
+	let stringifyInput = $state('{\n  "name": "John Doe",\n  "age": 30,\n  "active": true\n}');
+	let stringifyMode = $state<'parse' | 'stringify'>('stringify');
+	let stringifyEscapes = $state(false);
 
 	// Query
 	let queryInput = $state('{\n  "users": [\n    { "name": "Alice", "age": 30 },\n    { "name": "Bob", "age": 25 }\n  ]\n}');
@@ -121,6 +136,25 @@
 			setResult(JSON.stringify(parsed, null, minifyIndent || undefined));
 		} catch (e: any) {
 			setErr(e.message || String(e));
+		}
+	}
+
+	function runStringify() {
+		try {
+			let cleaned = stringifyInput.replace(/\\"/g, '"');
+			const parsed = JSON.parse(cleaned);
+			let result: string;
+			if (stringifyMode === 'stringify') {
+				result = JSON.stringify(parsed);
+				if (stringifyEscapes) {
+					result = result.replace(/"/g, '\\"');
+				}
+			} else {
+				result = JSON.stringify(parsed, null, 2);
+			}
+			setResult(result, stringifyMode === 'stringify' ? 'Stringified (minified) output' : 'Parsed & formatted output');
+		} catch (e: any) {
+			setErr('Invalid JSON: ' + (e.message || String(e)));
 		}
 	}
 
@@ -217,6 +251,7 @@
 	function runActive() {
 		if (activeTab === 'convert') runConvert();
 		else if (activeTab === 'minify') runMinify();
+		else if (activeTab === 'stringify') runStringify();
 		else if (activeTab === 'query') runQuery();
 		else if (activeTab === 'schema') runSchema();
 		else if (activeTab === 'mock') runMock();
@@ -245,9 +280,9 @@
 		URL.revokeObjectURL(url);
 	}
 
-	// Alt+1..7 switches feature, Ctrl/Cmd+Enter runs the active feature.
+	// Alt+1..9 switches feature, Ctrl/Cmd+Enter runs the active feature.
 	function onGlobalKey(e: KeyboardEvent) {
-		if (e.altKey && !e.ctrlKey && !e.metaKey && /^[1-8]$/.test(e.key)) {
+		if (e.altKey && !e.ctrlKey && !e.metaKey && /^[1-9]$/.test(e.key)) {
 			const n = Number(e.key);
 			if (n >= 1 && n <= tabs.length) {
 				e.preventDefault();
@@ -382,6 +417,35 @@
 					</select>
 				</div>
 				<MonacoField bind:value={minifyInput} language="json" height="16rem" />
+{:else if activeTab === 'stringify'}
+				<div class="mb-2 flex flex-wrap items-center gap-3">
+					<div class="flex gap-2">
+						<button
+							type="button"
+							onclick={() => (stringifyMode = 'stringify')}
+							class="px-3 py-1 text-sm rounded border {stringifyMode === 'stringify'
+								? 'bg-emerald-100 border-emerald-400 text-emerald-700'
+								: 'border-gray-300 text-gray-600'}"
+						>
+							Stringify
+						</button>
+						<button
+							type="button"
+							onclick={() => (stringifyMode = 'parse')}
+							class="px-3 py-1 text-sm rounded border {stringifyMode === 'parse'
+								? 'bg-emerald-100 border-emerald-400 text-emerald-700'
+								: 'border-gray-300 text-gray-600'}"
+						>
+							Parse
+						</button>
+					</div>
+					{#if stringifyMode === 'stringify'}
+						<label class="flex items-center gap-1 text-sm text-gray-600">
+							<input type="checkbox" bind:checked={stringifyEscapes} /> Add Escapes (\")
+						</label>
+					{/if}
+				</div>
+				<MonacoField bind:value={stringifyInput} language="json" height="16rem" />
 {:else if activeTab === 'query'}
 				<input
 					bind:value={queryPath}

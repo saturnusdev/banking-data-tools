@@ -32,17 +32,9 @@ export const ROUTE_SEO = {
 	'/json-tools': {
 		title: 'JSON Tools - Advanced JSON Editor with Tree View, Diff & Validation | DataCodec',
 		description:
-			'Professional JSON toolset with real-time validation, auto-repair, tree view, diff, JSONPath query, YAML/CSV/XML conversion, schema generation, and mock data generation. Free online.',
+			'Professional JSON toolset with real-time validation, auto-repair, tree view, diff, JSONPath query, YAML/CSV/XML conversion, stringify, schema generation, and mock data generation. Free online.',
 		keywords:
-			'JSON editor, JSON formatter, JSON validator, JSON diff, JSONPath, JSON schema, JSON to YAML, JSON to CSV, JSON tree view, online JSON tools',
-		type: 'website'
-	},
-	'/json-stringify': {
-		title: 'JSON Stringify - Convert & Format JSON Strings Online | DataCodec',
-		description:
-			'Convert, format, minify, and stringify JSON data with precision. Free online JSON stringify tool with syntax highlighting and validation.',
-		keywords:
-			'JSON stringify, JSON format, JSON minify, JSON beautify, JSON converter, online JSON stringify, JSON string formatter',
+			'JSON editor, JSON formatter, JSON validator, JSON diff, JSONPath, JSON schema, JSON to YAML, JSON to CSV, JSON tree view, JSON stringify, online JSON tools',
 		type: 'website'
 	},
 	'/iso8583-parser': {

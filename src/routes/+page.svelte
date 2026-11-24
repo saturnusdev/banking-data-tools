@@ -29,11 +29,11 @@
 		},
 		{
 			id: 3,
-			title: 'JSON Stringify',
-			description: 'Convert and format JSON strings with precision',
-			icon: 'proicons:text',
-			color: 'from-purple-500 to-indigo-500',
-			link: '/json-stringify'
+			title: 'IDM to Swagger',
+			description: 'Convert IDM specifications to Swagger/OpenAPI documentation',
+			icon: 'material-symbols:api',
+			color: 'from-orange-500 to-red-500',
+			link: '/idm-swagger'
 		},
 		{
 			id: 4,
