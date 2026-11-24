@@ -78,4 +78,10 @@
 		<changefreq>monthly</changefreq>
 		<priority>0.7</priority>
 	</url>
+	<url>
+		<loc>https://www.banking-tools.java-sc.com/excel-to-openapi</loc>
+		<lastmod>2026-11-24</lastmod>
+		<changefreq>monthly</changefreq>
+		<priority>0.8</priority>
+	</url>
 </urlset>

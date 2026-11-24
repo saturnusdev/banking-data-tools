@@ -37,11 +37,11 @@
 		},
 		{
 			id: 4,
-			title: 'IDM to Swagger',
-			description: 'Convert IDM specifications to Swagger/OpenAPI documentation',
+			title: 'Excel to OpenAPI',
+			description: 'Dynamically map any Excel sheet to OpenAPI/Swagger with header, column, and row selection',
 			icon: 'material-symbols:api',
-			color: 'from-orange-500 to-red-500',
-			link: '/idm-swagger'
+			color: 'from-emerald-500 to-teal-500',
+			link: '/excel-to-openapi'
 		},
 		{
 			id: 5,

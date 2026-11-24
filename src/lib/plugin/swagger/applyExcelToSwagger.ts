@@ -14,7 +14,7 @@ export function applyExcelToSwagger({
     path,
     method,
     conflicts = []
-}) {
+}: any) {
     if (!templateSwagger?.paths?.[path]?.[method]) {
         throw new Error(`Operation not found: ${method.toUpperCase()} ${path}`);
     }
@@ -36,13 +36,13 @@ export function applyExcelToSwagger({
 
     if (Array.isArray(targetOp.parameters)) {
         targetOp.parameters = targetOp.parameters.filter(
-            p => p.in !== 'body'
+            (p: any) => p.in !== 'body'
         );
     }
 
-    excelOp.parameters?.forEach(p => {
+    excelOp.parameters?.forEach((p: any) => {
         const existing = targetOp.parameters.find(
-            e => e.in === p.in && e.name === p.name
+            (e: any) => e.in === p.in && e.name === p.name
         );
 
         if (existing) {
@@ -63,7 +63,7 @@ export function applyExcelToSwagger({
     targetOp.responses ||= {};
     excelOp.responses ||= {};
 
-    Object.entries(excelOp.responses || {}).forEach(([code, resp]) => {
+    Object.entries(excelOp.responses || {}).forEach(([code, resp]: any) => {
         targetOp.responses["200"] ||= {
             description: resp["description"] || 'Response'
         };
@@ -94,7 +94,7 @@ export function applyExcelToSwagger({
         }
     }
 
-    Object.entries(excelSwagger.definitions || {}).forEach(([name, def]) => {
+    Object.entries(excelSwagger.definitions || {}).forEach(([name, def]: any) => {
         if (!templateSwagger.definitions[name]) {
             templateSwagger.definitions[name] = def;
             return;
@@ -103,7 +103,7 @@ export function applyExcelToSwagger({
         const targetDef = templateSwagger.definitions[name];
         targetDef.properties ||= {};
 
-        Object.entries(def["properties"] || {}).forEach(([prop, value]) => {
+        Object.entries(def["properties"] || {}).forEach(([prop, value]: any) => {
             if (
                 targetDef.properties[prop] &&
                 targetDef.properties[prop].type &&
@@ -121,7 +121,7 @@ export function applyExcelToSwagger({
 
         if (def['required']?.length) {
             targetDef.required ||= [];
-            def['required'].forEach(r => {
+            def['required'].forEach((r: any) => {
                 if (!targetDef.required.includes(r)) {
                     targetDef.required.push(r);
                 }

@@ -117,6 +117,14 @@ export const ROUTE_SEO = {
 			'IDM to Swagger, IDM converter, OpenAPI converter, Swagger generator, API documentation, IDM to OpenAPI, interface design model',
 		type: 'website'
 	},
+	'/excel-to-openapi': {
+		title: 'Excel to OpenAPI Generator - Dynamic Excel to Swagger/OpenAPI | DataCodec',
+		description:
+			'Dynamically convert any Excel sheet to OpenAPI/Swagger. Choose the standard template by sheet name, pick the header row, map columns to roles, and tag rows as header, request, or response. Free online Excel to OpenAPI generator.',
+		keywords:
+			'Excel to OpenAPI, Excel to Swagger, OpenAPI generator, Swagger generator, Excel API documentation, dynamic OpenAPI, spreadsheet to OpenAPI, API spec generator',
+		type: 'website'
+	},
 	'/abcs-converter': {
 		title: 'ABCS Converter - Parse ABCS Binary Data with DFDL Schemas | DataCodec',
 		description:
