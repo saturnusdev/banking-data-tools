@@ -141,7 +141,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - **Tailwind CSS**: For the utility-first CSS framework
 - **Iconify**: For the comprehensive icon library
 - **OpenAPI Community**: For the Swagger/OpenAPI standards
+- **Old Dev**: For idea to craft this tools
 
 ---
 
-Built with ❤️ using Svelte and modern web technologies.
+Built half-asleep with Svelte and modern web tech.
