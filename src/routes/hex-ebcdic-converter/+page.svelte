@@ -12,6 +12,7 @@
 		hexToBytes,
 		base64ToBytes
 	} from '#lib/plugin/iso8583/codec';
+	import { confirmOnLeave } from '#lib/navigation-guard';
 
 	let inputData = $state('');
 	let outputData = $state('');
@@ -115,6 +116,12 @@
 	function outputLabel() {
 		return currentMode.label.split('→')[1].trim();
 	}
+
+	// Warn before reload / back / forward / swipe / navigating away with unsaved data.
+	function hasUnsavedData() {
+		return inputData.trim() !== '' || outputData.trim() !== '';
+	}
+	confirmOnLeave(hasUnsavedData);
 </script>
 
 <main class="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">

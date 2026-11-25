@@ -1,5 +1,6 @@
 <script>
 	import Icon from "@iconify/svelte";
+	import { confirmOnLeave } from '#lib/navigation-guard';
 
 	let fixedText = $state('');
 	let fields = $state([]);
@@ -221,6 +222,12 @@
 		a.click();
 		URL.revokeObjectURL(a.href);
 	}
+
+	// Warn before reload / back / forward / swipe / navigating away with unsaved data.
+	function hasUnsavedData() {
+		return fixedText.trim() !== '' || parsedData.length > 0 || xsdInput.trim() !== '';
+	}
+	confirmOnLeave(hasUnsavedData);
 </script>
 
 <main class="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">

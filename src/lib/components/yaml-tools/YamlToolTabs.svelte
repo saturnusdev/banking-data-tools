@@ -12,6 +12,7 @@
 	import { filterYaml, type FilterMode } from '#lib/yaml/filter';
 	import { jsonToCsv, csvToJson } from '#lib/json/convert';
 	import { jsonToXml, xmlToJson } from '#lib/json/xml';
+	import { confirmOnLeave } from '#lib/navigation-guard';
 
 	type ConvertMode = 'yaml-to-x' | 'x-to-yaml';
 	type ConvertFormat = 'json' | 'csv' | 'xml';
@@ -334,6 +335,18 @@
 		filterTarget = '';
 		clearOutput();
 	}
+
+	// Warn before reload / back / forward / swipe / navigating away with unsaved data.
+	// Inputs are prefilled with samples, so we only warn when a result was generated.
+	function hasUnsavedData() {
+		return (
+			output.trim() !== '' ||
+			Boolean(validateResult) ||
+			lintIssues.length > 0 ||
+			diffOutModified.trim() !== ''
+		);
+	}
+	confirmOnLeave(hasUnsavedData);
 </script>
 
 <!-- Tab Navigation (matches ISO 8583 Studio layout) -->

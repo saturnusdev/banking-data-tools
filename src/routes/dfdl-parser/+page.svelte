@@ -2,6 +2,7 @@
 	import Icon from '@iconify/svelte';
 
 	import { onMount } from 'svelte';
+	import { confirmOnLeave } from '#lib/navigation-guard';
 
 	// EBCDIC Hex Table
 	const ebcdicTable = {
@@ -926,6 +927,14 @@
 		selectedStoredMbase = '';
 		selectedStoredDatatype = '';
 	}
+
+	// Warn before reload / back / forward / swipe / navigating away with unsaved data.
+	// Note: locally-stored schema/header files are persisted, so they are NOT
+	// treated as unsaved work — only the current session's inputs/results are.
+	function hasUnsavedData() {
+		return Boolean(dfdlFile) || Boolean(results) || base64Input.trim() !== '';
+	}
+	confirmOnLeave(hasUnsavedData);
 </script>
 
 <main class="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">

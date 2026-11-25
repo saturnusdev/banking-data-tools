@@ -1,6 +1,7 @@
 <script>
 	import Icon from '@iconify/svelte';
 	import { ISO8583 } from '#lib/plugin/iso8583/iso8583Parser';
+	import { confirmOnLeave } from '#lib/navigation-guard';
 
 	let inputMessage = '';
 	let properties = null;
@@ -55,6 +56,12 @@
 			'12345678';
 		parseMessage();
 	}
+
+	// Warn before reload / back / forward / swipe / navigating away with unsaved data.
+	function hasUnsavedData() {
+		return inputMessage.trim() !== '';
+	}
+	confirmOnLeave(hasUnsavedData);
 </script>
 
 <main class="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">

@@ -9,6 +9,7 @@
 	import SafeIcon from '#lib/SafeIcon.svelte';
 	import MonacoField from './MonacoField.svelte';
 	import GitHubDiff from './GitHubDiff.svelte';
+	import { confirmOnLeave } from '#lib/navigation-guard';
 
 	type Tab =
 		| 'convert'
@@ -340,6 +341,13 @@
 		compareDiffModified = '';
 		clearOutput();
 	}
+
+	// Warn before reload / back / forward / swipe / navigating away with unsaved data.
+	// Inputs are prefilled with samples, so we only warn when a result was generated.
+	function hasUnsavedData() {
+		return output.trim() !== '';
+	}
+	confirmOnLeave(hasUnsavedData);
 </script>
 
 <!-- Tab Navigation (matches ISO 8583 Studio layout) -->

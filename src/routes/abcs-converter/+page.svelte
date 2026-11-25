@@ -1,6 +1,7 @@
 <script>
 	import Icon from '@iconify/svelte';
 	import { onMount } from 'svelte';
+	import { confirmOnLeave } from '#lib/navigation-guard';
 	import {
 		parseAbcsSchema,
 		buildSchemaTree,
@@ -749,6 +750,20 @@
 		missingTypes = [];
 		selectedStoredFile = '';
 	}
+
+	// Warn before reload / back / forward / swipe / navigating away with unsaved data.
+	// Note: locally-stored schema files are persisted, so they are NOT treated as
+	// unsaved work — only the current session's uploads/inputs/results are.
+	function hasUnsavedData() {
+		return (
+			Boolean(schemaFile) ||
+			Boolean(binaryFile) ||
+			hexInput.trim() !== '' ||
+			base64Input.trim() !== '' ||
+			Boolean(results)
+		);
+	}
+	confirmOnLeave(hasUnsavedData);
 </script>
 
 <main class="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">

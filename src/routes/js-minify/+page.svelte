@@ -1,6 +1,7 @@
 <script>
 	import Icon from '@iconify/svelte';
 	import { loadTerser, loadPrettier } from '#lib/lazy-loads';
+	import { confirmOnLeave } from '#lib/navigation-guard';
 
 	// Lazy loaded dependencies
 	let minify = null;
@@ -210,6 +211,12 @@ console.log("Total:", total);`;
 		mode = 'original';
 		error = '';
 	}
+
+	// Warn before reload / back / forward / swipe / navigating away with unsaved data.
+	function hasUnsavedData() {
+		return jsCode.trim() !== '';
+	}
+	confirmOnLeave(hasUnsavedData);
 </script>
 
 

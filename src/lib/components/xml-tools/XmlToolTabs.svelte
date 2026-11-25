@@ -18,6 +18,7 @@
 	import MonacoField from '#lib/components/json-tools/MonacoField.svelte';
 	import GitHubDiff from '#lib/components/json-tools/GitHubDiff.svelte';
 	import XmlTree from './XmlTree.svelte';
+	import { confirmOnLeave } from '#lib/navigation-guard';
 
 	type Tab = 'format' | 'validate' | 'convert' | 'fixed' | 'csv' | 'escape' | 'diff' | 'tree';
 
@@ -312,6 +313,17 @@
 		treeSelection = '';
 		switchTab('format');
 	}
+
+	// Warn before reload / back / forward / swipe / navigating away with unsaved data.
+	// Inputs are prefilled with samples, so we only warn when a result was generated.
+	function hasUnsavedData() {
+		return (
+			output.trim() !== '' ||
+			Boolean(validationResult) ||
+			diffOutModified.trim() !== ''
+		);
+	}
+	confirmOnLeave(hasUnsavedData);
 </script>
 
 <!-- Tab Navigation (matches ISO 8583 Studio layout) -->

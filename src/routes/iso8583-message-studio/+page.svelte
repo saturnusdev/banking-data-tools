@@ -6,6 +6,7 @@
 	import { decodeLegacy, buildLegacy } from '#lib/plugin/iso8583/legacy';
 	import { simulateResponse } from '#lib/plugin/iso8583/simulator';
 	import { compareMessages } from '#lib/plugin/iso8583/compare';
+	import { confirmOnLeave } from '#lib/navigation-guard';
 
 	let activeTab = $state('decode');
 
@@ -133,6 +134,22 @@
 			'12345678';
 		doDecode();
 	}
+
+	// Warn before reload / back / forward / swipe / navigating away with unsaved data.
+	function hasUnsavedData() {
+		return (
+			decodeInput.trim() !== '' ||
+			Boolean(decodeResult) ||
+			Object.keys(buildValues).length > 0 ||
+			Boolean(buildResult) ||
+			simInput.trim() !== '' ||
+			Boolean(simState) ||
+			cmpA.trim() !== '' ||
+			cmpB.trim() !== '' ||
+			Boolean(cmpResult)
+		);
+	}
+	confirmOnLeave(hasUnsavedData);
 </script>
 
 <main class="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">

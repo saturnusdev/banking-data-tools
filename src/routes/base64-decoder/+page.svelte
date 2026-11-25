@@ -12,6 +12,7 @@
 		remapJsonStructure,
 		isHexValue
 	} from '#lib/base64-processor.js';
+	import { confirmOnLeave } from '#lib/navigation-guard';
 
 	let inputText = '';
 	let decodedOutput = '';
@@ -217,6 +218,16 @@
 		inputText = 'SGVsbG8sIEJhc2U2NCE='; // base64 for "Hello, Base64!"
 		detectAndDecode();
 	}
+
+	// Warn before reload / back / forward / swipe / navigating away with unsaved data.
+	function hasUnsavedData() {
+		return (
+			inputText.trim() !== '' ||
+			Boolean(decodedOutput) ||
+			Boolean(remappedOutput)
+		);
+	}
+	confirmOnLeave(hasUnsavedData);
 </script>
 
 <main class="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
