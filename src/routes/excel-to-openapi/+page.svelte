@@ -1,6 +1,7 @@
 <script>
 	import Icon from '@iconify/svelte';
 	import 'swagger-ui-dist/swagger-ui.css';
+	import { onMount } from 'svelte';
 	import { loadSwaggerUI, loadXLSX, loadYAML } from '#lib/lazy-loads';
 	import { confirmOnLeave } from '#lib/navigation-guard';
 	import {
@@ -8,9 +9,9 @@
 		autoMapColumns,
 		generateBuild,
 		buildFreshSpec,
-		mergeIntoTemplate
+		mergeTemplateFields,
+		detectVersion
 	} from '#lib/plugin/openapi/index';
-	import { updateSwaggerFromForm } from '#lib/plugin/swagger/updateSwaggerFromForm';
 	import { COLUMN_ROLES } from '#lib/plugin/openapi/index';
 
 	let XLSX = null;
@@ -52,6 +53,9 @@
 	let selectedTemplate = ''; // '' = generate fresh
 	let templateFileInput;
 
+	// localStorage key so uploaded templates can be re-chosen later
+	const TEMPLATES_STORAGE_KEY = 'excel-to-openapi:templates';
+
 	// UI
 	let conflicts = [];
 	let showGrid = false;
@@ -85,6 +89,50 @@
 		if (!swaggerContainer) return;
 		swaggerContainer.innerHTML = '';
 		SwaggerUI({ domNode: swaggerContainer, spec });
+	}
+
+	// ---- Local template storage (persist uploaded OpenAPI templates) ----
+
+	function readStoredTemplates() {
+		try {
+			const raw = localStorage.getItem(TEMPLATES_STORAGE_KEY);
+			if (!raw) return [];
+			const entries = JSON.parse(raw);
+			if (!Array.isArray(entries)) return [];
+			return entries.filter(
+				(entry) => entry && typeof entry.name === 'string' && entry.doc
+			);
+		} catch (e) {
+			console.warn('Could not read stored templates:', e);
+			return [];
+		}
+	}
+
+	function persistTemplates() {
+		try {
+			localStorage.setItem(
+				TEMPLATES_STORAGE_KEY,
+				JSON.stringify(templates.map(({ name, doc }) => ({ name, doc })))
+			);
+		} catch (e) {
+			// Non-fatal: quota exceeded or serialization issue.
+			console.warn('Could not store templates locally:', e);
+		}
+	}
+
+	function addTemplate(name, doc) {
+		// Replace any existing template with the same name, else append.
+		const existing = templates.some((t) => t.name === name);
+		templates = existing
+			? templates.map((t) => (t.name === name ? { name, doc } : t))
+			: [...templates, { name, doc }];
+		persistTemplates();
+	}
+
+	function removeTemplate(name) {
+		templates = templates.filter((t) => t.name !== name);
+		if (selectedTemplate === name) selectedTemplate = '';
+		persistTemplates();
 	}
 
 	function handleExcelUpload(e) {
@@ -180,25 +228,40 @@
 
 	function toggleSelect(index, event) {
 		let next = [...selectedRows];
+
 		if (event?.shiftKey && lastClickedIndex !== null) {
-			// Extend from the last-clicked anchor to this row.
-			const start = Math.min(lastClickedIndex, index);
-			const end = Math.max(lastClickedIndex, index);
-			// Base the action on the anchor row's state: if it was selected we
-			// select the whole range, otherwise we clear the whole range.
-			const shouldSelect = selectedRows.includes(lastClickedIndex);
-			for (let i = start; i <= end; i++) {
-				if (shouldSelect) {
-					if (!next.includes(i)) next.push(i);
-				} else {
-					next = next.filter((n) => n !== i);
+			// Extend from the anchor to this row — but only across rows that are
+			// currently visible (i.e. match the active filters), so filtering
+			// never causes hidden/non-matching rows to be selected.
+			const visible = getDisplayRows().map(({ index: i }) => i);
+			const anchorPos = visible.indexOf(lastClickedIndex);
+			const clickedPos = visible.indexOf(index);
+
+			if (anchorPos !== -1 && clickedPos !== -1) {
+				const start = Math.min(anchorPos, clickedPos);
+				const end = Math.max(anchorPos, clickedPos);
+				// Base the action on the anchor row's state: if it was selected we
+				// select the whole visible range, otherwise we clear it.
+				const shouldSelect = selectedRows.includes(lastClickedIndex);
+				for (let pos = start; pos <= end; pos++) {
+					const i = visible[pos];
+					if (shouldSelect) {
+						if (!next.includes(i)) next.push(i);
+					} else {
+						next = next.filter((n) => n !== i);
+					}
 				}
+			} else {
+				// Anchor or target is filtered out — fall back to a plain toggle.
+				if (next.includes(index)) next = next.filter((n) => n !== index);
+				else next.push(index);
 			}
 		} else if (next.includes(index)) {
 			next = next.filter((n) => n !== index);
 		} else {
 			next.push(index);
 		}
+
 		selectedRows = next;
 		lastClickedIndex = index;
 	}
@@ -253,10 +316,7 @@
 				reader.onload = (evt) => {
 					try {
 						const doc = yaml.load(evt.target.result);
-						templates = [
-							...templates,
-							{ name: file.name.replace(/\.[^.]+$/, ''), doc }
-						];
+						addTemplate(file.name.replace(/\.[^.]+$/, ''), doc);
 						error = '';
 						// If a sheet is already selected and matches, link it.
 						if (
@@ -296,7 +356,18 @@
 		}
 
 		try {
-			const build = generateBuild({ version, dataRows, rowGroups, columnMap });
+			const templateEntry = templates.find((t) => t.name === selectedTemplate);
+		// When merging into a template, build using the TEMPLATE's own version so
+		// the internal $ref bases (definitions vs components/schemas) match.
+		const effectiveVersion = templateEntry
+			? detectVersion(templateEntry.doc)
+			: version;
+		const build = generateBuild({
+			version: effectiveVersion,
+			dataRows,
+			rowGroups,
+			columnMap
+		});
 			if (!build.present.header && !build.present.request && !build.present.response) {
 				error = 'Tag at least one row as header, request, or response.';
 				return;
@@ -310,23 +381,17 @@
 				basePath
 			};
 
-			const templateEntry = templates.find((t) => t.name === selectedTemplate);
 			let spec;
 
 			if (templateEntry) {
-				const merged = mergeIntoTemplate({
+				// Surgical merge: only the request/response definitions and the
+				// four metadata fields change; the rest of the template is kept.
+				spec = mergeTemplateFields({
 					template: structuredClone(templateEntry.doc),
-					version,
-					path: meta.path,
-					method: meta.method,
 					build,
-					conflicts
-				});
-				spec = merged.spec;
-				// Update template metadata from the form where the keys exist.
-				updateSwaggerFromForm(spec, {
+					header: true,
 					title: meta.title,
-					titleName: meta.title.toLowerCase().replaceAll(' ', '-'),
+					xIbmName: meta.title.toLowerCase().replaceAll(' ', '-'),
 					apiVersion: meta.apiVersion,
 					basePath: meta.basePath
 				});
@@ -353,9 +418,10 @@
 
 	/** True when the user has entered data worth warning about before leaving. */
 	function hasUnsavedData() {
+		// Note: the template library is persisted locally, so it is NOT treated
+		// as unsaved work — only the current session's inputs/outputs are.
 		return (
 			Boolean(excelFile) ||
-			templates.length > 0 ||
 			Boolean(yamlText) ||
 			Boolean(selectedSheet) ||
 			apiName.trim() !== '' ||
@@ -375,7 +441,8 @@
 		columnMap = {};
 		selectedRows = [];
 		columnFilters = {};
-		templates = [];
+		// Keep the locally-stored template library available after a reset.
+		templates = readStoredTemplates();
 		selectedTemplate = '';
 		apiName = '';
 		apiVersion = '1.0.0';
@@ -390,9 +457,14 @@
 		lastClickedIndex = null;
 	}
 
-	// Warn before reload / back / forward / swipe / navigating away with unsaved
-	// data. Registered during component init as required by beforeNavigate.
-	confirmOnLeave(hasUnsavedData);
+	onMount(() => {
+		// Restore locally-stored OpenAPI templates so they can be re-chosen.
+		templates = readStoredTemplates();
+
+		// Warn before reload / back / forward / swipe / navigating away with
+		// unsaved data. Registered during component init for beforeNavigate.
+		confirmOnLeave(hasUnsavedData);
+	});
 </script>
 
 <main class="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50">
@@ -456,10 +528,25 @@
 						class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
 					/>
 					{#if templates.length}
-						<div class="mt-2 flex flex-wrap gap-2">
-							{#each templates as t}
-								<span class="px-2 py-1 text-xs rounded-full bg-emerald-100 text-emerald-700">{t.name}</span>
-							{/each}
+						<div class="mt-2">
+							<p class="text-xs text-gray-500 mb-1">
+								Saved in this browser — re-choose anytime from the template dropdown below.
+							</p>
+							<div class="flex flex-wrap gap-2">
+								{#each templates as t (t.name)}
+									<span class="inline-flex items-center gap-1 pl-2 pr-1 py-1 text-xs rounded-full bg-emerald-100 text-emerald-700">
+										{t.name}
+										<button
+											type="button"
+											aria-label="Remove template {t.name}"
+											onclick={() => removeTemplate(t.name)}
+											class="ml-1 rounded-full hover:bg-emerald-200 p-0.5 leading-none"
+										>
+											<Icon icon="mdi-light:close" class="h-3.5 w-3.5" />
+										</button>
+									</span>
+								{/each}
+							</div>
 						</div>
 					{/if}
 				</div>

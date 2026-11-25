@@ -126,6 +126,12 @@ export function buildFreshSpec({
 	return spec;
 }
 
+/** Detect whether a loaded doc is Swagger 2.0 or OpenAPI 3.x. */
+export function detectVersion(doc: any): OpenApiVersion {
+	if (doc?.openapi && String(doc.openapi).startsWith('3')) return '3.0';
+	return '2.0';
+}
+
 /** Convenience wrapper used by the page. */
 export function generateBuild({
 	version,
