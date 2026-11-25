@@ -8,7 +8,7 @@ const DYNAMIC_CACHE = 'dynamic-v1';
 const STATIC_ASSETS = [
   '/',
   '/app.css',
-  '/favicon.svg',
+  '/icon.png',
   '/manifest.json',
   '/robots.txt'
 ];
@@ -134,8 +134,8 @@ function doBackgroundSync() {
 self.addEventListener('push', (event) => {
   const options = {
     body: event.data ? event.data.text() : 'New update available!',
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
+    icon: '/icon.png',
+    badge: '/icon.png',
     vibrate: [100, 50, 100],
     data: {
       dateOfArrival: Date.now(),

@@ -12,7 +12,7 @@
   "categories": ["productivity", "developer", "utilities"],
   "icons": [
     {
-      "src": "/favicon.svg",
+      "src": "/icon.png",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"

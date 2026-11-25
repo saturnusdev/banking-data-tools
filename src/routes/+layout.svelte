@@ -1,6 +1,6 @@
 <script>
 	import './layout.css';
-	import favicon from '#lib/assets/favicon.svg';
+	import favicon from '#lib/assets/icon.png';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { getSeoForPath } from '#lib/seo/config.js';
@@ -88,7 +88,7 @@
 
 	<!-- Additional SEO Tags -->
 	<link rel="canonical" href={seoMeta.url} />
-	<link rel="icon" href="/favicon.svg" />
+	<link rel="icon" href="/icon.png" />
 	<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 	<meta name="format-detection" content="telephone=no" />
 	<meta name="mobile-web-app-capable" content="yes" />
