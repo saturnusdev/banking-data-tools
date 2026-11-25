@@ -115,10 +115,10 @@
 				<h1
 					class="mb-4 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-3xl font-bold text-transparent"
 				>
-					Banking Data Tools
+					DataCodec
 				</h1>
 				<p class="mx-auto max-w-3xl text-xl text-gray-600">
-					Tools to support engineering team in banking domain for data processing and analysis
+					Developer Payload Editors, Codecs & Banking Message Tools
 				</p>
 			</div>
 		</div>

@@ -6,7 +6,7 @@
 	let xmlTabs;
 
 	const pageSeo = $derived({
-		title: 'XML Editor - Format, Validate, Convert, Diff & Tree View | Banking Data Tools',
+		title: 'XML Editor - Format, Validate, Convert, Diff & Tree View | DataCodec',
 		description:
 			'Professional XML toolset with formatter, validator, XML to JSON, XML to fixed-width, XML to CSV, entity escape/unescape, GitHub-style XML diff, and interactive XML tree view.',
 		keywords:

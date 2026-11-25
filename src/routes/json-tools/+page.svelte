@@ -10,7 +10,7 @@
 
 	// Page-specific SEO metadata
 	const pageSeo = $derived({
-		title: 'JSON Tools - Advanced JSON Editor with Tree View | Banking Data Tools',
+		title: 'JSON Tools - Advanced JSON Editor with Tree View | DataCodec',
 		description: 'Professional JSON toolset with real-time validation, auto-repair, tree view, diff, JSONPath query, YAML/CSV/XML conversion, schema generation, and mock data generation.',
 		keywords: 'JSON editor, JSON validator, JSON formatter, JSON repair, JSON tree view, JSON diff, JSON to YAML, JSON to CSV, JSON to XML, JSONPath, JSON schema generator, mock data generator, JSON minify, JSON tools, online JSON tools',
 		url: `https://www.banking-tools.java-sc.com${page.url.pathname}`,

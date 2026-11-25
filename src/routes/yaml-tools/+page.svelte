@@ -7,7 +7,7 @@
 
 	// Page-specific SEO metadata
 	const pageSeo = $derived({
-		title: 'YAML Tools - Validate, Lint, Convert, Merge & Diff | Banking Data Tools',
+		title: 'YAML Tools - Validate, Lint, Convert, Merge & Diff | DataCodec',
 		description:
 			'Professional YAML toolset with real-time validation, linting, conversion to JSON/CSV/XML, minify/pretty, deep merge, diff, key-value extraction, and filtering.',
 		keywords:

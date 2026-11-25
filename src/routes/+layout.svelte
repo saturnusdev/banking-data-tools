@@ -76,7 +76,7 @@
 	<meta property="og:image" content={seoMeta.image} />
 	<meta property="og:url" content={seoMeta.url} />
 	<meta property="og:type" content={seoMeta.type} />
-	<meta property="og:site_name" content="Banking Data Tools" />
+	<meta property="og:site_name" content="DataCodec - Developer Payload Editors, Codecs & Banking Message Tools" />
 	<meta property="og:locale" content="en_US" />
 
 	<!-- Twitter Card Meta Tags -->
@@ -94,7 +94,7 @@
 	<meta name="mobile-web-app-capable" content="yes" />
 	<meta name="apple-mobile-web-app-capable" content="yes" />
 	<meta name="apple-mobile-web-app-status-bar-style" content="default" />
-	<meta name="apple-mobile-web-app-title" content="Banking Data Tools" />
+	<meta name="apple-mobile-web-app-title" content="DataCodec - Developer Payload Editors, Codecs & Banking Message Tools" />
 
 	<!-- Structured Data (JSON-LD) — route-aware -->
 	<script type="application/ld+json">
