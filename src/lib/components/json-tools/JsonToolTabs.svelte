@@ -302,74 +302,109 @@
 	function copyOutput() {
 		navigator.clipboard?.writeText(output);
 	}
+
+	// Reset every tool back to its sample data (wired to the header "Load Sample" button).
+	export function loadSample() {
+		convertInput = '{\n  "name": "John Doe",\n  "age": 30,\n  "tags": ["admin", "dev"]\n}';
+		convertFormat = 'yaml';
+		convertMode = 'json-to-x';
+		minifyInput = '{\n  "name": "John Doe",\n  "age": 30\n}';
+		minifyIndent = 0;
+		stringifyInput = '{\n  "name": "John Doe",\n  "age": 30,\n  "active": true\n}';
+		stringifyMode = 'stringify';
+		stringifyEscapes = false;
+		queryInput =
+			'{\n  "users": [\n    { "name": "Alice", "age": 30 },\n    { "name": "Bob", "age": 25 }\n  ]\n}';
+		queryPath = '$.users[?(@.age > 26)].name';
+		schemaInput =
+			'{\n  "name": "John Doe",\n  "age": 30,\n  "active": true,\n  "tags": ["a", "b"]\n}';
+		mockInput =
+			'{\n  "type": "object",\n  "properties": {\n    "name": { "type": "string" },\n    "age": { "type": "integer" },\n    "email": { "type": "string", "format": "email" }\n  }\n}';
+		paginateInput = '[\n  { "id": 1, "name": "Item 1" },\n  { "id": 2, "name": "Item 2" }\n]';
+		paginatePage = 1;
+		paginatePageSize = 10;
+		cleanInput = '{\n  "a": 1,\n  "b": null,\n  "c": "",\n  "d": [],\n  "e": { "x": null }\n}';
+		cleanOpts = {
+			removeNulls: true,
+			removeEmptyObjects: true,
+			removeEmptyArrays: true,
+			removeEmptyStrings: true,
+			sortKeys: false,
+			dedupeArrays: false,
+			trimStrings: false
+		};
+		compareOriginal = '{\n  "name": "Alice",\n  "role": "admin",\n  "active": true\n}';
+		compareModified =
+			'{\n  "name": "Alice",\n  "role": "viewer",\n  "active": true,\n  "lastLogin": "2024-01-15"\n}';
+		compareDiffOriginal = '';
+		compareDiffModified = '';
+		clearOutput();
+	}
 </script>
 
-<div class="bg-white rounded-2xl shadow-xl border border-green-100 overflow-hidden">
-	<div class="bg-gradient-to-r from-green-500 to-emerald-500 p-6">
-		<div class="flex items-center space-x-3">
-			<div class="rounded-full bg-white/20 p-3">
-				<SafeIcon iconName="mdi-light:view-dashboard" customClass="h-8 w-8 text-white" />
-			</div>
-			<div>
-				<h2 class="text-xl font-bold text-white">JSON Tools</h2>
-				<p class="text-white/80 text-sm mt-1">Convert, minify, query, and generate JSON data</p>
-			</div>
-		</div>
-	</div>
-	<div class="flex items-center justify-between gap-2 bg-slate-800 px-2 py-1.5">
-		<div class="flex items-center gap-0.5">
+<!-- Tab Navigation (matches ISO 8583 Studio layout) -->
+<nav class="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-green-100 shadow-sm">
+	<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+		<div class="flex gap-1 overflow-x-auto py-2">
 			{#each tabs as tab, i}
 				<button
 					type="button"
 					title="{tab.label} (Alt+{i + 1})"
 					aria-label={tab.label}
 					onclick={() => selectTab(tab.id)}
-					class="p-1.5 rounded transition-colors {activeTab === tab.id
-						? 'bg-emerald-500 text-white'
-						: 'text-gray-400 hover:bg-slate-700 hover:text-white'}"
+					class="flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all {activeTab === tab.id
+						? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md'
+						: 'text-gray-600 hover:bg-green-50'}"
 				>
-					<SafeIcon iconName={tab.icon} customClass="h-5 w-5" />
+					<SafeIcon iconName={tab.icon} customClass="h-4 w-4" />
+					{tab.label}
 				</button>
 			{/each}
 		</div>
-		<div class="flex items-center gap-1">
-			<button
-				type="button"
-				title="Run {activeLabel} (Ctrl+Enter)"
-				onclick={runActive}
-				class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded cursor-pointer bg-emerald-500 text-white transition-colors hover:bg-emerald-600"
-			>
-				<SafeIcon iconName="mdi:play" customClass="h-4 w-4" />
-				<span>{activeLabel}</span>
-			</button>
-			<button
-				type="button"
-				title="Copy output"
-				aria-label="Copy output"
-				onclick={copyOutput}
-				class="p-1.5 rounded transition-colors text-gray-400 hover:bg-slate-700 hover:text-white"
-			>
-				<SafeIcon iconName="mdi:content-copy" customClass="h-5 w-5" />
-			</button>
-			<button
-				type="button"
-				title="Download output"
-				aria-label="Download output"
-				onclick={downloadOutput}
-				class="p-1.5 rounded transition-colors text-gray-400 hover:bg-slate-700 hover:text-white"
-			>
-				<SafeIcon iconName="mdi:download" customClass="h-5 w-5" />
-			</button>
-			<button
-				type="button"
-				title="Clear output"
-				aria-label="Clear output"
-				onclick={clearOutput}
-				class="p-1.5 rounded transition-colors text-gray-400 hover:bg-slate-700 hover:text-white"
-			>
-				<SafeIcon iconName="mdi:delete" customClass="h-5 w-5" />
-			</button>
-		</div>
+	</div>
+</nav>
+
+<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+	<div class="overflow-hidden rounded-2xl border border-green-100 bg-white shadow-xl">
+
+	<!-- Action Toolbar -->
+	<div class="flex items-center justify-end gap-1 border-b border-gray-100 bg-gray-50 px-4 py-2">
+		<button
+			type="button"
+			title="Run {activeLabel} (Ctrl+Enter)"
+			onclick={runActive}
+			class="flex cursor-pointer items-center gap-1.5 rounded bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-600"
+		>
+			<SafeIcon iconName="mdi:play" customClass="h-4 w-4" />
+			<span>{activeLabel}</span>
+		</button>
+		<button
+			type="button"
+			title="Copy output"
+			aria-label="Copy output"
+			onclick={copyOutput}
+			class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800"
+		>
+			<SafeIcon iconName="mdi:content-copy" customClass="h-5 w-5" />
+		</button>
+		<button
+			type="button"
+			title="Download output"
+			aria-label="Download output"
+			onclick={downloadOutput}
+			class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800"
+		>
+			<SafeIcon iconName="mdi:download" customClass="h-5 w-5" />
+		</button>
+		<button
+			type="button"
+			title="Clear output"
+			aria-label="Clear output"
+			onclick={clearOutput}
+			class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800"
+		>
+			<SafeIcon iconName="mdi:delete" customClass="h-5 w-5" />
+		</button>
 	</div>
 
 	<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
@@ -526,5 +561,6 @@
 				<div class="text-xs text-red-600 mt-1">{error}</div>
 			{/if}
 		</div>
+	</div>
 	</div>
 </div>

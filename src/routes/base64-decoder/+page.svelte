@@ -211,6 +211,12 @@
 	function toggleRawOutput() {
 		showRawOutput = !showRawOutput;
 	}
+
+	function loadSample() {
+		selectedType = 'auto';
+		inputText = 'SGVsbG8sIEJhc2U2NCE='; // base64 for "Hello, Base64!"
+		detectAndDecode();
+	}
 </script>
 
 <main class="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
@@ -241,6 +247,13 @@
 						</div>
 					</div>
 				</div>
+				<button
+					onclick={loadSample}
+					class="hidden sm:flex items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-4 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100 transition-colors"
+				>
+					<Icon icon="mdi-light:flask" class="h-4 w-4" />
+					Load Sample
+				</button>
 			</div>
 		</div>
 	</header>

@@ -96,6 +96,12 @@
 		outputData = temp;
 	}
 
+	function loadSample() {
+		inputData = '48656C6C6F20576F726C64'; // "Hello World" in hex
+		conversionMode = 'hexToEbcdic';
+		convert();
+	}
+
 	function inputPlaceholder() {
 		if (currentMode.input === 'hex') return 'Enter hexadecimal values (e.g., 48656C6C6F20576F726C64)...';
 		if (currentMode.input === 'base64') return 'Enter Base64 encoded data...';
@@ -137,49 +143,48 @@
 						</div>
 					</div>
 				</div>
+				<button
+					onclick={loadSample}
+					class="hidden sm:flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 transition-colors"
+				>
+					<Icon icon="mdi-light:flask" class="h-4 w-4" />
+					Load Sample
+				</button>
 			</div>
 		</div>
 	</header>
 
-	<!-- Main Content -->
-	<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-
-		<!-- Conversion Mode Section -->
-		<section class="bg-white rounded-2xl shadow-xl border border-pink-100 overflow-hidden">
-			<div class="bg-gradient-to-r from-pink-500 to-rose-500 p-6">
-				<div class="flex items-center justify-between">
-					<div class="flex items-center space-x-3">
-						<Icon icon="mdi-light:swap-horizontal" class="h-6 w-6 text-white" />
-						<h2 class="text-xl font-bold text-white">Conversion Mode</h2>
-					</div>
-					<button
-						onclick={swapConversion}
-						class="group relative overflow-hidden rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
-						title="Swap input and output"
-					>
-						<span class="relative z-10 flex items-center space-x-2">
-							<Icon icon="mdi-light:swap-horizontal" class="h-4 w-4" />
-							<span>Swap</span>
-						</span>
-					</button>
-				</div>
-			</div>
-			<div class="p-6">
-				<div class="flex flex-wrap gap-2">
+	<!-- Conversion Mode Navigation (matches ISO 8583 Studio layout) -->
+	<nav class="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-pink-100 shadow-sm">
+		<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+			<div class="flex items-center justify-between gap-2 py-2">
+				<div class="flex gap-1 overflow-x-auto">
 					{#each codecModes as mode}
 						<button
 							onclick={() => { conversionMode = mode.id; convert(); }}
-							class="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all {conversionMode === mode.id
+							class="flex items-center gap-2 shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all {conversionMode === mode.id
 								? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md'
-								: 'bg-gray-100 text-gray-600 hover:bg-gray-200'}"
+								: 'text-gray-600 hover:bg-pink-50'}"
 						>
 							<Icon icon={mode.icon} class="h-4 w-4" />
 							{mode.label}
 						</button>
 					{/each}
 				</div>
+				<button
+					onclick={swapConversion}
+					class="flex shrink-0 items-center gap-2 rounded-xl border border-pink-200 bg-pink-50 px-4 py-2 text-sm font-medium text-pink-700 hover:bg-pink-100 transition-colors"
+					title="Swap input and output"
+				>
+					<Icon icon="mdi-light:swap-horizontal" class="h-4 w-4" />
+					Swap
+				</button>
 			</div>
-		</section>
+		</div>
+	</nav>
+
+	<!-- Main Content -->
+	<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 		<!-- Input Section -->
 		<section class="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
 			<div class="bg-gradient-to-r from-gray-700 to-gray-900 p-6">

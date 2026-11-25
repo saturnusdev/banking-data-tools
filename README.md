@@ -6,16 +6,6 @@ A comprehensive suite of data processing utilities built with Svelte, featuring 
 
 ### Core Tools
 
-#### **IDM to Swagger Converter**
-- **Purpose**: Convert Excel IDM specifications to professional Swagger/OpenAPI documentation
-- **Features**:
-  - Excel file upload and processing
-  - Swagger template support with conflict detection
-  - API metadata configuration (name, version, business service, etc.)
-  - Live Swagger UI preview
-  - YAML export functionality
-  - Modern orange/red gradient UI theme
-
 #### **ISO8583 Parser**
 - **Purpose**: Parse and analyze ISO8583 financial transaction messages
 - **Features**:
@@ -109,7 +99,6 @@ src/
 │       ├── swagger/    # Swagger generation logic
 │       └── ...
 ├── routes/            # Page routes
-│   ├── idm-swagger/      # IDM to Swagger converter
 │   ├── iso8583-parser/   # ISO8583 parser
 │   ├── dfdl-parser/       # DFDL parser
 │   ├── js-minify/         # JavaScript minifier

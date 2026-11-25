@@ -279,37 +279,61 @@
 		diffOutModified = '';
 		treeSelection = '';
 	}
+
+	// Reset every tool back to its sample data (wired to the header "Load Sample" button).
+	export function loadSample() {
+		formatInput = sampleXml;
+		formatIndent = 2;
+		validateInput = sampleXml;
+		validationResult = null;
+		convertInput = sampleXml;
+		convertMode = 'xml-to-json';
+		convertRoot = 'records';
+		fixedMode = 'xml-to-fixed';
+		fixedXmlInput = sampleXml;
+		fixedTextInput = '';
+		fixedFields = [
+			{ name: 'id', length: 6, align: 'left', pad: ' ' },
+			{ name: 'name', length: 20, align: 'left', pad: ' ' },
+			{ name: 'amount', length: 12, align: 'right', pad: '0' }
+		];
+		fixedRecordName = 'record';
+		fixedRootName = 'records';
+		csvInput = sampleXml;
+		csvDelimiter = ',';
+		escapeInput = '<name>John & Jane</name>';
+		escapeMode = 'escape';
+		diffOriginal = sampleXml;
+		diffModified = sampleXmlModified;
+		diffOutOriginal = '';
+		diffOutModified = '';
+		treeInput = sampleXml;
+		treeNodes = [];
+		treeSelection = '';
+		switchTab('format');
+	}
 </script>
 
-<div class="space-y-6">
-	<!-- Tabs -->
-	<div class="bg-white rounded-2xl shadow-xl border border-orange-100 overflow-hidden">
-		<div class="bg-gradient-to-r from-orange-500 to-amber-500 p-5">
-			<div class="flex items-center gap-3">
-				<Icon icon="mdi:file-xml-box" class="h-6 w-6 text-white" />
-				<div>
-					<h2 class="text-xl font-bold text-white">XML Tools</h2>
-					<p class="text-orange-50 text-sm">Format, validate, convert, and transform XML documents</p>
-				</div>
-			</div>
-		</div>
-		<div class="p-4">
-			<div class="flex flex-wrap gap-2">
-				{#each tabs as tab}
-					<button
-						onclick={() => switchTab(tab.id)}
-						class="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all {activeTab === tab.id
-							? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
-							: 'bg-gray-100 text-gray-600 hover:bg-gray-200'}"
-					>
-						<Icon icon={tab.icon} class="h-4 w-4" />
-						{tab.label}
-					</button>
-				{/each}
-			</div>
+<!-- Tab Navigation (matches ISO 8583 Studio layout) -->
+<nav class="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-orange-100 shadow-sm">
+	<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+		<div class="flex gap-1 overflow-x-auto py-2">
+			{#each tabs as tab}
+				<button
+					onclick={() => switchTab(tab.id)}
+					class="flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all {activeTab === tab.id
+						? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
+						: 'text-gray-600 hover:bg-orange-50'}"
+				>
+					<Icon icon={tab.icon} class="h-4 w-4" />
+					{tab.label}
+				</button>
+			{/each}
 		</div>
 	</div>
+</nav>
 
+<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 	<!-- Format / Minify -->
 	{#if activeTab === 'format'}
 		<section class="bg-white rounded-2xl shadow-xl border border-orange-100 overflow-hidden">

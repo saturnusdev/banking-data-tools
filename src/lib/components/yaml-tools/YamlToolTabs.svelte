@@ -300,76 +300,105 @@
 		window.addEventListener('keydown', onGlobalKey);
 		return () => window.removeEventListener('keydown', onGlobalKey);
 	});
+
+	// Reset every tool back to its sample data (wired to the header "Load Sample" button).
+	export function loadSample() {
+		validateInput =
+			'name: John Doe\nage: 30\nactive: true\ntags:\n  - admin\n  - dev\naddress:\n  city: Jakarta\n  zip: "12345"';
+		validateResult = null;
+		validateSummary = null;
+		lintInput = 'name: John Doe\nage: 30\n\tbad: tab-indented\ndupe: 1\ndupe: 2\n';
+		lintIssues = [];
+		convertInput = 'name: John Doe\nage: 30\ntags:\n  - admin\n  - dev';
+		convertMode = 'yaml-to-x';
+		convertFormat = 'json';
+		formatInput = 'name: John Doe\nage: 30\nactive: true\nitems:\n  - a\n  - b';
+		formatMode = 'pretty';
+		formatIndent = 2;
+		formatLineWidth = 100;
+		formatSortKeys = false;
+		mergeBase = 'server:\n  host: localhost\n  port: 8080\n  timeout: 30';
+		mergeOverride = 'server:\n  port: 9090\n  tls: true\nfeatures:\n  - auth';
+		mergeArrayMode = 'replace';
+		diffOriginal = 'name: Alice\nrole: admin\nactive: true';
+		diffModified = 'name: Alice\nrole: viewer\nactive: true\nlastLogin: "2024-01-15"';
+		diffOutOriginal = '';
+		diffOutModified = '';
+		keysInput =
+			'user:\n  name: John\n  profile:\n    email: john@example.com\n    age: 30\n  roles:\n    - admin\n    - dev';
+		keysSearch = '';
+		keysAll = [];
+		filterInput =
+			'users:\n  - name: Alice\n    role: admin\n  - name: Bob\n    role: viewer\nsettings:\n  debug: true\n  theme: dark';
+		filterMode = 'keep-key';
+		filterTarget = '';
+		clearOutput();
+	}
 </script>
 
-<div class="overflow-hidden rounded-2xl border border-green-100 bg-white shadow-xl">
-	<div class="bg-gradient-to-r from-green-500 to-emerald-500 p-6">
-		<div class="flex items-center space-x-3">
-			<div class="rounded-full bg-white/20 p-3">
-				<SafeIcon iconName="mdi-light:view-dashboard" customClass="h-8 w-8 text-white" />
-			</div>
-			<div>
-				<h2 class="text-xl font-bold text-white">YAML Tools</h2>
-				<p class="mt-1 text-sm text-white/80">
-					Validate, lint, convert, format, merge, diff, and filter YAML documents
-				</p>
-			</div>
-		</div>
-	</div>
-	<div class="flex items-center justify-between gap-2 bg-slate-800 px-2 py-1.5">
-		<div class="flex flex-wrap items-center gap-0.5">
+<!-- Tab Navigation (matches ISO 8583 Studio layout) -->
+<nav class="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-green-100 shadow-sm">
+	<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+		<div class="flex gap-1 overflow-x-auto py-2">
 			{#each YAML_TOOLS as tool}
 				<button
 					type="button"
 					title="{tool.label} (Alt+{tool.shortcut}) — {tool.description}"
 					aria-label={tool.label}
 					onclick={() => selectTab(tool.id)}
-					class="rounded p-1.5 transition-colors {activeTab === tool.id
-						? 'bg-emerald-500 text-white'
-						: 'text-gray-400 hover:bg-slate-700 hover:text-white'}"
+					class="flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all {activeTab === tool.id
+						? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md'
+						: 'text-gray-600 hover:bg-green-50'}"
 				>
-					<SafeIcon iconName={tool.icon} customClass="h-5 w-5" />
+					<SafeIcon iconName={tool.icon} customClass="h-4 w-4" />
+					{tool.label}
 				</button>
 			{/each}
 		</div>
-		<div class="flex items-center gap-1">
-			<button
-				type="button"
-				title="Run {activeLabel} (Ctrl+Enter)"
-				onclick={runActive}
-				class="flex cursor-pointer items-center gap-1.5 rounded bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-600"
-			>
-				<SafeIcon iconName="mdi:play" customClass="h-4 w-4" />
-				<span>{activeLabel}</span>
-			</button>
-			<button
-				type="button"
-				title="Copy output"
-				aria-label="Copy output"
-				onclick={copyOutput}
-				class="rounded p-1.5 text-gray-400 transition-colors hover:bg-slate-700 hover:text-white"
-			>
-				<SafeIcon iconName="mdi:content-copy" customClass="h-5 w-5" />
-			</button>
-			<button
-				type="button"
-				title="Download output"
-				aria-label="Download output"
-				onclick={downloadOutput}
-				class="rounded p-1.5 text-gray-400 transition-colors hover:bg-slate-700 hover:text-white"
-			>
-				<SafeIcon iconName="mdi:download" customClass="h-5 w-5" />
-			</button>
-			<button
-				type="button"
-				title="Clear output"
-				aria-label="Clear output"
-				onclick={clearOutput}
-				class="rounded p-1.5 text-gray-400 transition-colors hover:bg-slate-700 hover:text-white"
-			>
-				<SafeIcon iconName="mdi:delete" customClass="h-5 w-5" />
-			</button>
-		</div>
+	</div>
+</nav>
+
+<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+	<div class="overflow-hidden rounded-2xl border border-green-100 bg-white shadow-xl">
+
+	<!-- Action Toolbar -->
+	<div class="flex items-center justify-end gap-1 border-b border-gray-100 bg-gray-50 px-4 py-2">
+		<button
+			type="button"
+			title="Run {activeLabel} (Ctrl+Enter)"
+			onclick={runActive}
+			class="flex cursor-pointer items-center gap-1.5 rounded bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-600"
+		>
+			<SafeIcon iconName="mdi:play" customClass="h-4 w-4" />
+			<span>{activeLabel}</span>
+		</button>
+		<button
+			type="button"
+			title="Copy output"
+			aria-label="Copy output"
+			onclick={copyOutput}
+			class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800"
+		>
+			<SafeIcon iconName="mdi:content-copy" customClass="h-5 w-5" />
+		</button>
+		<button
+			type="button"
+			title="Download output"
+			aria-label="Download output"
+			onclick={downloadOutput}
+			class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800"
+		>
+			<SafeIcon iconName="mdi:download" customClass="h-5 w-5" />
+		</button>
+		<button
+			type="button"
+			title="Clear output"
+			aria-label="Clear output"
+			onclick={clearOutput}
+			class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800"
+		>
+			<SafeIcon iconName="mdi:delete" customClass="h-5 w-5" />
+		</button>
 	</div>
 
 	<div class="grid grid-cols-1 gap-4 p-4 lg:grid-cols-2">
@@ -675,5 +704,6 @@
 		Add a new tool by registering it in <code class="text-emerald-600">src/lib/yaml/tools.ts</code>
 		and adding a case in <code class="text-emerald-600">YamlToolTabs.svelte</code>. Shortcuts:
 		Alt+1..8 switch tools, Ctrl/Cmd+Enter runs.
+	</div>
 	</div>
 </div>

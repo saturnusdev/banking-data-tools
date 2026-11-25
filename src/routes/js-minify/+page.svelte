@@ -186,6 +186,30 @@
 		error = '';
 		mode = 'original';
 	}
+
+	function loadSample() {
+		jsCode = `// Sample JavaScript code
+function greet(name) {
+  const message = "Hello, " + name + "!";
+  console.log(message);
+  return message;
+}
+
+function add(a, b) {
+  // sum two numbers
+  return a + b;
+}
+
+const users = ["Alice", "Bob", "Charlie"];
+users.forEach(function (u) {
+  greet(u);
+});
+
+const total = add(2, 3);
+console.log("Total:", total);`;
+		mode = 'original';
+		error = '';
+	}
 </script>
 
 
@@ -217,64 +241,54 @@
 						</div>
 					</div>
 				</div>
+				<button
+					onclick={loadSample}
+					class="hidden sm:flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors"
+				>
+					<Icon icon="mdi-light:flask" class="h-4 w-4" />
+					Load Sample
+				</button>
 			</div>
 		</div>
 	</header>
 
+	<!-- Code Mode Navigation (matches ISO 8583 Studio layout) -->
+	<nav class="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-yellow-100 shadow-sm">
+		<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+			<div class="flex gap-1 overflow-x-auto py-2">
+				<button
+					onclick={() => (mode = 'original')}
+					class="flex items-center gap-2 shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all {mode === 'original'
+						? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-md'
+						: 'text-gray-600 hover:bg-orange-50'}"
+				>
+					<Icon icon="mdi-light:file-document" class="h-4 w-4" />
+					Original
+				</button>
+				<button
+					onclick={() => (mode = 'minified')}
+					class="flex items-center gap-2 shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all {mode === 'minified'
+						? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-md'
+						: 'text-gray-600 hover:bg-orange-50'}"
+				>
+					<Icon icon="mdi-light:compress" class="h-4 w-4" />
+					Minified
+				</button>
+				<button
+					onclick={() => (mode = 'unminified')}
+					class="flex items-center gap-2 shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all {mode === 'unminified'
+						? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-md'
+						: 'text-gray-600 hover:bg-orange-50'}"
+				>
+					<Icon icon="mdi-light:expand" class="h-4 w-4" />
+					Unminified
+				</button>
+			</div>
+		</div>
+	</nav>
+
 	<!-- Main Content -->
 	<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-
-		<!-- Mode Selection Section -->
-		<section class="bg-white rounded-2xl shadow-xl border border-yellow-100 overflow-hidden">
-			<div class="bg-gradient-to-r from-yellow-500 to-orange-500 p-6">
-				<div class="flex items-center justify-between">
-					<div class="flex items-center space-x-3">
-						<Icon icon="mdi-light:toggle-switch" class="h-6 w-6 text-white" />
-						<h2 class="text-xl font-bold text-white">Code Mode</h2>
-					</div>
-				</div>
-			</div>
-			<div class="p-6">
-				<div class="flex justify-center">
-					<div class="inline-flex rounded-xl bg-gray-100 p-1">
-						<button
-							onclick={() => (mode = 'original')}
-							class="rounded-lg px-6 py-3 text-sm font-medium transition-all {mode === 'original'
-								? 'bg-white text-yellow-600 shadow-md'
-								: 'text-gray-600 hover:text-gray-800'}"
-						>
-							<span class="flex items-center space-x-2">
-								<Icon icon="mdi-light:file-document" class="h-4 w-4" />
-								<span>Original</span>
-							</span>
-						</button>
-						<button
-							onclick={() => (mode = 'minified')}
-							class="rounded-lg px-6 py-3 text-sm font-medium transition-all {mode === 'minified'
-								? 'bg-white text-yellow-600 shadow-md'
-								: 'text-gray-600 hover:text-gray-800'}"
-						>
-							<span class="flex items-center space-x-2">
-								<Icon icon="mdi-light:compress" class="h-4 w-4" />
-								<span>Minified</span>
-							</span>
-						</button>
-						<button
-							onclick={() => (mode = 'unminified')}
-							class="rounded-lg px-6 py-3 text-sm font-medium transition-all {mode === 'unminified'
-								? 'bg-white text-yellow-600 shadow-md'
-								: 'text-gray-600 hover:text-gray-800'}"
-						>
-							<span class="flex items-center space-x-2">
-								<Icon icon="mdi-light:expand" class="h-4 w-4" />
-								<span>Unminified</span>
-							</span>
-						</button>
-					</div>
-				</div>
-			</div>
-		</section>
-
 		<!-- Minify Options Section -->
 		{#if mode === 'original'}
 			<section class="bg-white rounded-2xl shadow-xl border border-orange-100 overflow-hidden">

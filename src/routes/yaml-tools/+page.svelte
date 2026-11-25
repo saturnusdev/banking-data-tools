@@ -3,6 +3,8 @@
 	import YamlToolTabs from '#lib/components/yaml-tools/YamlToolTabs.svelte';
 	import { page } from '$app/state';
 
+	let yamlTabs: YamlToolTabs;
+
 	// Page-specific SEO metadata
 	const pageSeo = $derived({
 		title: 'YAML Tools - Validate, Lint, Convert, Merge & Diff | Banking Data Tools',
@@ -93,11 +95,16 @@
 						</div>
 					</div>
 				</div>
+				<button
+					onclick={() => yamlTabs?.loadSample()}
+					class="hidden sm:flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+				>
+					<SafeIcon iconName="mdi:flask-outline" customClass="h-4 w-4" />
+					Load Sample
+				</button>
 			</div>
 		</div>
 	</header>
 
-	<div class="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
-		<YamlToolTabs />
-	</div>
+	<YamlToolTabs bind:this={yamlTabs} />
 </main>

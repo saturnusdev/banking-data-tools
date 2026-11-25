@@ -109,14 +109,6 @@ export const ROUTE_SEO = {
 			'XML editor, XML formatter, XML validator, XML beautifier, XML to JSON, XML diff, XML tree view, online XML editor, XML minifier',
 		type: 'website'
 	},
-	'/idm-swagger': {
-		title: 'IDM to Swagger Converter - Convert IDM Specs to OpenAPI | DataCodec',
-		description:
-			'Convert IDM (Interface Design Model) specifications to Swagger/OpenAPI documentation. Free online IDM to Swagger converter for API documentation.',
-		keywords:
-			'IDM to Swagger, IDM converter, OpenAPI converter, Swagger generator, API documentation, IDM to OpenAPI, interface design model',
-		type: 'website'
-	},
 	'/excel-to-openapi': {
 		title: 'Excel to OpenAPI Generator - Dynamic Excel to Swagger/OpenAPI | DataCodec',
 		description:

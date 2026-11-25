@@ -126,7 +126,6 @@
 				"Fixed-Length Data Parser",
 				"XML Editor",
 				"ABCS Converter",
-				"IDM to Swagger Converter",
 				"Excel to OpenAPI Generator"
 			]
 		}

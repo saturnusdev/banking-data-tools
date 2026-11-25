@@ -3,6 +3,8 @@
 	import { page } from '$app/state';
 	import XmlToolTabs from '#lib/components/xml-tools/XmlToolTabs.svelte';
 
+	let xmlTabs;
+
 	const pageSeo = $derived({
 		title: 'XML Editor - Format, Validate, Convert, Diff & Tree View | Banking Data Tools',
 		description:
@@ -31,32 +33,39 @@
 	<!-- Header Section -->
 	<header class="bg-white shadow-lg border-b border-orange-100">
 		<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-			<div class="flex items-center space-x-4">
-				<button
-					class="group rounded-full p-2 text-orange-600 transition-all hover:bg-orange-100 hover:scale-110"
-					onclick={() => (location.href = '/')}
-				>
-					<Icon icon="mdi-light:arrow-left" class="h-6 w-6 transition-transform group-hover:-translate-x-1" />
-				</button>
-				<div class="flex items-center space-x-3">
-					<div class="rounded-full bg-gradient-to-r from-orange-500 to-amber-500 p-3">
-						<Icon icon="mdi:file-xml-box" class="h-8 w-8 text-white" />
-					</div>
-					<div>
-						<h1 class="text-3xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
-							XML Editor
-						</h1>
-						<p class="text-gray-600 mt-1">
-							Format, validate, and convert XML — JSON, fixed-width, CSV, and entity escaping
-						</p>
+			<div class="flex items-center justify-between">
+				<div class="flex items-center space-x-4">
+					<button
+						class="group rounded-full p-2 text-orange-600 transition-all hover:bg-orange-100 hover:scale-110"
+						onclick={() => (location.href = '/')}
+					>
+						<Icon icon="mdi-light:arrow-left" class="h-6 w-6 transition-transform group-hover:-translate-x-1" />
+					</button>
+					<div class="flex items-center space-x-3">
+						<div class="rounded-full bg-gradient-to-r from-orange-500 to-amber-500 p-3">
+							<Icon icon="mdi:file-xml-box" class="h-8 w-8 text-white" />
+						</div>
+						<div>
+							<h1 class="text-3xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
+								XML Editor
+							</h1>
+							<p class="text-gray-600 mt-1">
+								Format, validate, and convert XML — JSON, fixed-width, CSV, and entity escaping
+							</p>
+						</div>
 					</div>
 				</div>
+				<button
+					onclick={() => xmlTabs?.loadSample()}
+					class="hidden sm:flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors"
+				>
+					<Icon icon="mdi:flask-outline" class="h-4 w-4" />
+					Load Sample
+				</button>
 			</div>
 		</div>
 	</header>
 
 	<!-- Main Content -->
-	<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-		<XmlToolTabs />
-	</div>
+	<XmlToolTabs bind:this={xmlTabs} />
 </main>
