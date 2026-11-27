@@ -16,61 +16,35 @@
  * `xs:element` or inside `xs:annotation/xs:appinfo` DFDL elements.
  */
 
+import { matchesPattern } from './converterRules.js';
+
 /* ------------------------------------------------------------------ */
-/* Schema alias registry (metadata only — no schema content)           */
+/* Schema resolution (generic — no vendor naming)                      */
 /*                                                                     */
-/* Bank-specific DFDL schemas are NOT shipped with the project. The    */
-/* user uploads them once; they are persisted in localStorage and       */
-/* resolved automatically when converting. This map only records the   */
-/* filenames each schema may be referenced as (from xsd:include /       */
-/* xsd:import schemaLocation="...") so a schema uploaded under any of   */
-/* its known names still resolves. All lookups are case-insensitive.   */
+/* Bank/vendor DFDL schemas are NOT shipped with the project. The user  */
+/* uploads them once; they are persisted in localStorage and resolved   */
+/* when converting. Includes/imports are resolved purely by the         */
+/* filename in each schemaLocation attribute — no vendor naming is      */
+/* hardcoded here. All lookups are case-insensitive.                   */
 /* ------------------------------------------------------------------ */
-
-export const SCHEMA_ALIASES = {
-	// General purpose format (IBM)
-	'generalpurposeformat.xsd': ['generalpurposeformat.xsd'],
-	// RecordFixLengthFieldFormat — referenced as "IBMdefined/RecordFixLengthFieldFormat.xsd"
-	'recordfixlengthfieldformat.xsd': ['recordfixlengthfieldformat.xsd'],
-	// DataTypes — file is dataType.xsd, referenced as DataTypes.xsd / dataType.xsd
-	'datatype.xsd': ['datatypes.xsd', 'datatype.xsd'],
-	// ABCS header — file is header.xsd, referenced as ABCSHeader.xsd / header.xsd
-	'header.xsd': ['abcsheader.xsd', 'header.xsd'],
-	// DSP header — file is dspHeader.xsd, referenced as DSPHeader.xsd / DSPHeaderResponse.xsd
-	'dspheader.xsd': ['dspheader.xsd', 'dspheaderresponse.xsd'],
-	// ABCS error body — file is error.xsd, referenced as ABCSError.xsd / error.xsd
-	'error.xsd': ['abcserror.xsd', 'error.xsd'],
-};
-
-// Reverse lookup: any alias -> canonical filename (lowercase).
-const ALIAS_TO_CANONICAL = (() => {
-	const map = {};
-	for (const [canonical, aliases] of Object.entries(SCHEMA_ALIASES)) {
-		for (const alias of aliases) map[alias.toLowerCase()] = canonical;
-	}
-	return map;
-})();
 
 /**
- * Expand a schema filename to every alias it may be referenced as.
- * Unknown filenames resolve to themselves (so arbitrary user schemas
- * and the primary message schema are still registered under their own
- * name). All returned aliases are lowercase.
+ * Expand a schema filename to the names it may be referenced as. Resolution
+ * is purely filename-based (generic), so this returns the lowercased name.
+ * Kept as a hook so a deployment could add local, non-published aliases if
+ * it ever needs to — but the committed default carries no vendor naming.
  *
  * @param {string} filename
  * @returns {string[]}
  */
 export function expandAliases(filename) {
-	const lower = String(filename).toLowerCase();
-	const canonical = ALIAS_TO_CANONICAL[lower] || lower;
-	return SCHEMA_ALIASES[canonical] || [lower];
+	return [String(filename).toLowerCase()];
 }
 
 /**
  * Resolve all xsd:include/xsd:import schemaLocation references in a list of
  * schema texts by pulling in matching user-supplied schemas (keyed by
- * filename, case-insensitive). Each supplied schema is registered under all
- * of its known aliases so includes resolve regardless of the exact name used.
+ * filename, case-insensitive).
  *
  * @param {string[]} texts - initial schema texts
  * @param {Record<string,string>} [userSchemas] - schemas from localStorage
@@ -81,12 +55,9 @@ export function resolveAllIncludes(texts, userSchemas = {}) {
 	const seen = new Set(texts);
 	const queue = [...texts];
 
-	// Register every user schema under its own name + all known aliases.
+	// Register every user schema under its own (lowercased) filename.
 	const allAvailable = {};
 	for (const [name, content] of Object.entries(userSchemas)) {
-		for (const alias of expandAliases(name)) {
-			allAvailable[alias.toLowerCase()] = content;
-		}
 		allAvailable[name.toLowerCase()] = content;
 	}
 
@@ -106,6 +77,54 @@ export function resolveAllIncludes(texts, userSchemas = {}) {
 	}
 	return result;
 }
+
+/**
+ * Walk the full xsd:include / xsd:import dependency graph (transitively) and
+ * report which referenced files are satisfied by the user's uploaded schemas
+ * and which are still missing. Matching is by the basename of each
+ * schemaLocation (so "IBMdefined/Foo.xsd" or "../common/Foo.xsd" both match an
+ * uploaded "Foo.xsd").
+ *
+ * This lets the UI guide the user to upload one file at a time and keep going
+ * until every dependency is clear.
+ *
+ * @param {string[]} texts - active schema texts (the primary/message schema)
+ * @param {Record<string,string>} [userSchemas] - uploaded schemas by filename
+ * @returns {{ resolved: string[], missing: string[] }}
+ */
+export function collectDependencies(texts, userSchemas = {}) {
+	const resolved = [];
+	const missing = new Set();
+	const seen = new Set();
+	const queue = [...texts];
+
+	// Available uploaded schemas keyed by lowercased filename.
+	const available = {};
+	for (const [name, content] of Object.entries(userSchemas)) {
+		available[name.toLowerCase()] = content;
+	}
+
+	while (queue.length) {
+		const text = queue.shift();
+		const refs = [...text.matchAll(/<[^>]*:?(?:include|import)\b[^>]*schemaLocation=["']([^"']+)["']/gi)]
+			.map(m => m[1].split('/').pop().toLowerCase())
+			.filter(Boolean);
+		for (const ref of refs) {
+			const content = available[ref];
+			if (content) {
+				if (!seen.has(content)) {
+					seen.add(content);
+					resolved.push(ref);
+					queue.push(content);
+				}
+			} else {
+				missing.add(ref);
+			}
+		}
+	}
+	return { resolved, missing: [...missing] };
+}
+
 /* ------------------------------------------------------------------ */
 /* EBCDIC (CP037) -> ASCII conversion table                            */
 /* ------------------------------------------------------------------ */
@@ -510,7 +529,7 @@ function isNumericType(typeName) {
 		'unsignedLong', 'unsignedInt', 'unsignedShort', 'unsignedByte', 'float', 'double'].includes(t);
 }
 
-/** IBM/DFDL zoned-decimal (DISPLAY) numeric types, e.g. `SIBS-Unsigned-Zoned-Decimal__int`. */
+/** IBM/DFDL zoned-decimal (DISPLAY) numeric types, e.g. `a zoned-decimal numeric type`. */
 function isZonedDecimal(typeName) {
 	const t = String(typeName || '').replace(/^xs:/, '').toLowerCase();
 	return t.includes('zoned') || (t.includes('zoned-decimal') || t.includes('zoned_decimal'));
@@ -534,8 +553,8 @@ function isBinaryType(typeName) {
 }
 
 /**
- * IBM binary numeric types (e.g. `SIBS-Binary-Numeric__int`, used for the ABCS
- * header `ICLEN`). These are raw fixed-width binary integers, not zoned/packed.
+ * IBM binary numeric types (e.g. `a binary numeric type`, used for the ABCS
+ * header). These are raw fixed-width binary integers. These are raw fixed-width binary integers, not zoned/packed.
  */
 function isBinaryNumeric(typeName) {
 	const t = String(typeName || '').replace(/^xs:/, '').toLowerCase();
@@ -545,7 +564,7 @@ function isBinaryNumeric(typeName) {
 	);
 }
 
-/** IBM/DFDL packed-decimal (COMP-3 / BCD) detection — e.g. SIBS-Packed-Decimal__int. */
+/** IBM/DFDL packed-decimal (COMP-3 / BCD) detection — e.g. a packed-decimal numeric type. */
 function isPackedDecimal(node) {
 	const t = String(node.typeName || node.builtinType || '').toLowerCase();
 	if (t.includes('packed') || t.includes('comp-3') || t.includes('bcd')) return true;
@@ -738,7 +757,7 @@ export function parseAbcsSchema(xmlText) {
 
 	// Register ALL named <xs:element> definitions (top-level and nested), so the
 	// header/body roots can be resolved even when they are children of a wrapper
-	// element (e.g. ABCSMessage -> DSPHeader, ABCSHeader, ABCSBody).
+	// element (e.g. a wrapper root with child header/body elements).
 	for (const el of allElements) {
 		const local = el.localName || el.nodeName.split(':').pop();
 		if (local === 'element') {
@@ -819,67 +838,45 @@ export function collectMissingTypes(schemaTexts, mergedSchema) {
 }
 
 /**
- *
- * Request  -> prefers an exact `DSPHeader`, else a name containing "Header"
- *             but not "Response" (e.g. `DSPHeader`, `RequestHeader`).
- * Response -> prefers an exact `DSPHeaderResponse`, else a name containing
- *             "Response" (e.g. `DSPHeaderResponse`).
- *
- * @param {string[]} rootNames - available root element names
- * @param {'request'|'response'} direction
- * @returns {string|null}
- */
-export function findHeaderRoot(rootNames, direction) {
-	const names = (rootNames || []).map(n => String(n));
-	const norm = (n) => n.toLowerCase();
-
-	if (direction === 'response') {
-		return (
-			names.find(n => norm(n) === 'dspheaderresponse') ||
-			names.find(n => norm(n).includes('response') && norm(n).includes('header')) ||
-			names.find(n => norm(n).includes('response')) ||
-			null
-		);
-	}
-
-	return (
-		names.find(n => norm(n) === 'dspheader') ||
-		names.find(n => norm(n).includes('header') && !norm(n).includes('response')) ||
-		names.find(n => norm(n).includes('header')) ||
-		null
-	);
-}
-
-/**
  * Find ALL header root elements for a direction, in message order.
  *
- * A message is typically layered as:
- *   DSPHeader (or DSPHeaderResponse) -> ABCSHeader (or ABCSHeaderResponse) -> ABCSBody
- * so this returns the ordered list of header roots (DSP layer first, then the
- * ABCS layer), regardless of whether the schema names them with a direction
- * suffix. If no direction-specific root is found it falls back to any root whose
- * name contains "Header", so a schema with only one header variant still works.
+ * Header layers are defined by the USER's conversion rules (see
+ * converterRules.js) — the committed code carries no vendor naming. When the
+ * rules define header layers with a root pattern, roots are matched against
+ * those patterns and returned in the user's layer order (outermost first).
+ * When no rules/patterns are configured, it falls back to any root whose name
+ * contains "header" (a generic word), so a minimal setup still works.
  *
  * @param {string[]} rootNames - available root element names
  * @param {'request'|'response'} direction
+ * @param {ConversionRules} [rules] - user-defined conversion rules
  * @returns {string[]} ordered header root names (may be empty)
  */
-export function findHeaderRoots(rootNames, direction) {
+export function findHeaderRoots(rootNames, direction, rules = null) {
 	const names = (rootNames || []).map(n => String(n));
 	const norm = n => n.toLowerCase();
-	const isHeader = n => norm(n).includes('header');
+	const layers = (rules && Array.isArray(rules.headerLayers) ? rules.headerLayers : []).filter(
+		(l) => l && l.rootPattern
+	);
+
+	// Rule-driven: match roots against the user's per-layer patterns, preserving
+	// the layer order they defined (outermost header first).
+	if (layers.length) {
+		const out = [];
+		for (const layer of layers) {
+			for (const n of names) {
+				if (matchesPattern(n, layer.rootPattern) && !out.includes(n)) out.push(n);
+			}
+		}
+		return out;
+	}
+
+	// Generic fallback (no vendor terms): any root whose name contains "header",
+	// preferring the requested direction.
 	const isResp = n => /response|resp|rsp|reply/i.test(norm(n));
 	const isReq = n => /request|req|rq/i.test(norm(n));
-
-	const all = names.filter(isHeader);
-
-	// Order: DSP layer first, then the ABCS layer, then any other header roots.
-	// Within a layer, prefer the root matching the requested direction.
+	const all = names.filter(n => norm(n).includes('header'));
 	all.sort((a, b) => {
-		const layer = n => (norm(n).includes('dsp') ? 0 : (norm(n).includes('abcs') ? 1 : 2));
-		const la = layer(a);
-		const lb = layer(b);
-		if (la !== lb) return la - lb;
 		const pref = n => (direction === 'response'
 			? (isResp(n) ? 0 : (isReq(n) ? 2 : 1))
 			: (isReq(n) ? 0 : (isResp(n) ? 2 : 1)));
@@ -888,32 +885,32 @@ export function findHeaderRoots(rootNames, direction) {
 		if (pa !== pb) return pa - pb;
 		return norm(a).localeCompare(norm(b));
 	});
-
 	return all;
 }
 
 /**
  * Like {@link findHeaderRoots}, but schema-aware: prefers header roots among the
  * top-level root elements, and falls back to ANY named element in the schema.
- * The fallback covers schemas where DSPHeader/ABCSHeader/ABCSBody are children of
- * a wrapper root (e.g. ABCSMessage) rather than separate top-level elements.
+ * The fallback covers schemas where the header layers are children of a wrapper
+ * root rather than separate top-level elements.
  *
  * @param {{rootTypes:object, elementRegistry:object}} schema
  * @param {'request'|'response'} direction
+ * @param {ConversionRules} [rules] - user-defined conversion rules
  * @returns {string[]} ordered header root names (may be empty)
  */
-export function findHeaderRootsForSchema(schema, direction) {
-	const top = findHeaderRoots(Object.keys(schema?.rootTypes || {}), direction);
+export function findHeaderRootsForSchema(schema, direction, rules = null) {
+	const top = findHeaderRoots(Object.keys(schema?.rootTypes || {}), direction, rules);
 	if (top.length) return top;
-	return findHeaderRoots(Object.keys(schema?.elementRegistry || {}), direction);
+	return findHeaderRoots(Object.keys(schema?.elementRegistry || {}), direction, rules);
 }
 
 /**
  * Find a numeric field value anywhere in a parsed infoset (recursively).
- * Used to read header length fields (ICLEN / I13HLEN / I13MLEN).
+ * Used to read header length fields (the configured length fields).
  *
  * @param {object} json
- * @param {string} key - field name (e.g. 'I13HLEN', 'ICLEN')
+ * @param {string} key - field name (the configured length field)
  * @returns {number|null}
  */
 export function extractFieldValue(json, key) {
@@ -941,10 +938,10 @@ export function extractFieldValue(json, key) {
 
 /**
  * Find a raw field value anywhere in a parsed infoset (recursively), without
- * numeric coercion. Used to read string fields such as I13CNBF.SKTHEAD.
+ * numeric coercion. Used to read string fields such as the configured signature field.
  *
  * @param {object} json
- * @param {string} key - field name (e.g. 'SKTHEAD')
+ * @param {string} key - field name (the configured signature field)
  * @returns {*} the raw value, or undefined
  */
 export function findFieldValue(json, key) {
@@ -963,21 +960,31 @@ export function findFieldValue(json, key) {
 }
 
 /**
- * Extract the declared header/message length from a parsed header infoset.
- * Works for both the ABCS header (`ICLEN`) and the DSP header (`I13HLEN`/`I13MLEN`).
+ * Extract the declared byte length from a parsed header infoset, for each
+ * header layer the USER has defined. The field that declares a layer's length
+ * is user-specified (rules.headerLayers[].lengthField) — the committed code
+ * carries no vendor field names.
  *
- * @param {object} json - the parsed header JSON (e.g. { DSPHeaderResponse: {...} })
- * @returns {{ headerLength: number|null, messageLength: number|null }}
+ * @param {object} json - the parsed header JSON
+ * @param {ConversionRules} [rules] - user-defined conversion rules
+ * @returns {{
+ *   headerLength: number|null,
+ *   perLayer: Array<{ id:string, label:string, rootPattern:string, length:number|null }>
+ * }}
  */
-export function extractHeaderLengths(json) {
-	const dspLength = extractFieldValue(json, 'I13HLEN');
-	const abcsLength = extractFieldValue(json, 'ICLEN');
+export function extractHeaderLengths(json, rules = null) {
+	const layers = (rules && Array.isArray(rules.headerLayers) ? rules.headerLayers : []);
+	const perLayer = layers.map((l) => ({
+		id: l.id,
+		label: l.label,
+		rootPattern: l.rootPattern,
+		length: l.lengthField ? extractFieldValue(json, l.lengthField) : null
+	}));
+	// Convenience: the first layer that declares a length.
+	const first = perLayer.find((p) => p.length != null);
 	return {
-		// DSP header length = I13HLEN; ABCS header length = ICLEN.
-		headerLength: dspLength ?? abcsLength,
-		messageLength: extractFieldValue(json, 'I13MLEN'),
-		dspLength,
-		abcsLength
+		headerLength: first ? first.length : null,
+		perLayer
 	};
 }
 

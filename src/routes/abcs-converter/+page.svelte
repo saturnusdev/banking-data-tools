@@ -18,8 +18,16 @@
 		base64ToBytes,
 		collectMissingTypes,
 		resolveAllIncludes,
+		collectDependencies,
 		expandAliases
 	} from '#lib/plugin/abcs/abcsParser.js';
+	import {
+		loadRules,
+		saveRules,
+		matchesPattern,
+		DEFAULT_RULES as DEFAULT_CONVERSION_RULES
+	} from '#lib/plugin/abcs/converterRules.js';
+	import SearchSelect from '#lib/components/SearchSelect.svelte';
 
 	// Form state
 	let schemaFile = null;
@@ -29,7 +37,10 @@
 	let availableRoots = []; // top-level elements detected in the loaded schema(s)
 	let schemaNotice = ''; // info message about stored/uploaded schema
 	let messageDirection = 'auto'; // 'auto' | 'request' | 'response'
-	let mapABCSHeader = true; // also map the ABCSHeader (ICLEN) after the DSP header
+	let mapSecondaryHeader = true; // also map the secondary header layer after the first
+	// User-defined conversion rules (header layers, length fields, signatures).
+	// Persisted in localStorage — never in committed source.
+	let conversionRules = loadRules();
 	let binaryFile = null;
 	let binaryFileName = '';
 	let binaryFileSize = 0;
@@ -51,25 +62,27 @@
 	let flatFields = [];
 	let missingTypes = []; // unresolved xs:complexType refs (from xsd:include not uploaded)
 
-	// Reactively detect which xsd:include/xsd:import files from the active schema
-	// set are not yet stored in localStorage.
-	$: missingIncludes = (() => {
-		if (!schemaTexts.length && !schemaText) return [];
+	// Walk the FULL xsd:include/xsd:import dependency graph of the active schema
+	// set (transitively — includes of includes). Matching is by the basename of
+	// each schemaLocation, so "IBMdefined/Foo.xsd" is satisfied by an uploaded
+	// "Foo.xsd". Exposes resolved + missing so the UI can show upload progress
+	// until every dependency is clear.
+	$: dependencyInfo = (() => {
+		if (!schemaTexts.length && !schemaText) return { resolved: [], missing: [] };
 		const texts = schemaTexts.length ? schemaTexts : [schemaText];
-		const allRefs = new Set();
-		for (const text of texts) {
-			for (const m of text.matchAll(/<[^>]*:?(?:include|import)\b[^>]*schemaLocation=["']([^"']+)["']/gi)) {
-				allRefs.add(m[1].split('/').pop().toLowerCase());
-			}
-		}
-		// Resolved = any stored file, expanded to all its known aliases.
-		const resolved = new Set();
-		for (const f of storedFiles) {
-			for (const alias of expandAliases(f.name)) resolved.add(alias.toLowerCase());
-			resolved.add(f.name.toLowerCase());
-		}
-		return [...allRefs].filter(ref => !resolved.has(ref));
+		const userSchemas = Object.fromEntries(
+			storedFiles.map(f => [f.name.toLowerCase(), f.content])
+		);
+		return collectDependencies(texts, userSchemas);
 	})();
+	$: missingIncludes = dependencyInfo.missing;
+
+	// Root Element dropdown options: the special "all segments" entry plus every
+	// root element detected in the loaded schema(s).
+	$: rootOptions = [
+		{ value: '__ALL__', label: 'All segments (auto-detect)' },
+		...availableRoots.map((r) => ({ value: r, label: r }))
+	];
 
 	// Mode helpers (a header-mapped result is still a segments/single result underneath)
 	$: isSegmentsMode = !!results && (results['mode'] === 'segments' || results['mode'] === 'header+segments');
@@ -100,30 +113,16 @@
 	}
 
 	// ------------------------------------------------------------------
-	// Required support schemas (NOT shipped with the app for security).
-	// These are the bank-specific DFDL schemas the converter needs to
-	// resolve xsd:include/xsd:import references. Upload them once; they
-	// are persisted in localStorage and resolved automatically on convert.
+	// Support schemas (NOT shipped with the app for security).
+	// The user uploads ANY number of DFDL schemas the converter needs to
+	// resolve xsd:include/xsd:import references. They are persisted in
+	// localStorage and resolved automatically on convert. There is no fixed
+	// set and no vendor naming — the user decides which and how many schemas
+	// their message uses.
 	// ------------------------------------------------------------------
-	const REQUIRED_SCHEMAS = [
-		{ file: 'generalPurposeFormat.xsd', label: 'General Purpose Format', desc: 'DFDL general-purpose format properties' },
-		{ file: 'recordFixLengthFieldFormat.xsd', label: 'Record Fix-Length Field Format', desc: 'DFDL fixed-length record field format' },
-		{ file: 'dataType.xsd', label: 'Data Types', desc: 'Data type definitions' },
-		{ file: 'header.xsd', label: 'ABCS Header', desc: 'ABCSHeader (ICLEN) segment' },
-		{ file: 'dspHeader.xsd', label: 'DSP Header', desc: 'DSPHeader / DSPHeaderResponse segment' },
-		{ file: 'error.xsd', label: 'ABCS Error', desc: 'ABCSErrorRes body' }
-	];
 
-	// Per-required-schema status: is it already in localStorage (under any alias)?
-	$: requiredSchemaStatus = REQUIRED_SCHEMAS.map(req => {
-		const aliases = expandAliases(req.file);
-		const match = storedFiles.find(f => aliases.includes(f.name.toLowerCase()));
-		return { ...req, stored: !!match, storedName: match ? match.name : '' };
-	});
-	$: storedRequiredCount = requiredSchemaStatus.filter(r => r.stored).length;
-
-	// Upload one or more of the required support schemas and persist them.
-	async function handleRequiredUpload(event) {
+	// Upload one or more support schemas and persist them.
+	async function handleSupportUpload(event) {
 		const files = Array.from(event.target.files || []);
 		event.target.value = ''; // allow re-selecting the same file later
 		if (!files.length) return;
@@ -132,18 +131,71 @@
 			await storeFile(file);
 			added++;
 		}
-		const missing = requiredSchemaStatus.filter(r => !r.stored).length;
-		schemaNotice = `Stored ${added} schema file(s). ${missing === 0 ? 'All required schemas are loaded.' : `${missing} required schema(s) still missing.`}`;
+		schemaNotice = `Stored ${added} schema file(s). ${storedFiles.length} support schema(s) available.`;
 		error = '';
 	}
 
-	// Remove a stored required schema from localStorage.
-	function deleteRequiredSchema(name) {
+	// Remove a stored support schema from localStorage.
+	function deleteStoredSchema(name) {
 		storedFiles = storedFiles.filter(f => f.name !== name);
 		saveStoredFiles();
 		if (selectedStoredFile === name) selectedStoredFile = '';
 		mergeSelection = mergeSelection.filter(n => n !== name);
 		schemaNotice = `Removed ${name} from local storage.`;
+	}
+
+	// ------------------------------------------------------------------
+	// Conversion rules (user-defined, persisted in localStorage).
+	// These describe how to recognise each header layer and where its
+	// length/signature live — no vendor naming is baked into the source.
+	// ------------------------------------------------------------------
+	function addHeaderLayer() {
+		const n = (conversionRules.headerLayers || []).length + 1;
+		conversionRules.headerLayers = [
+			...(conversionRules.headerLayers || []),
+			{ id: `layer-${n}`, label: `Header Layer ${n}`, sourceFile: '', rootPattern: '', lengthField: '', signatureField: '', signatureValue: '' }
+		];
+		saveRules(conversionRules);
+	}
+
+	// Root element names available in a given uploaded schema (by filename).
+	// Used to offer a pick-list when a header layer is linked to a schema.
+	function schemaRootsFor(sourceFile) {
+		if (!sourceFile) return [];
+		const file = storedFiles.find(f => f.name === sourceFile);
+		if (!file) return [];
+		try {
+			const parsed = parseAbcsSchema(file.content);
+			const roots = Object.keys(parsed.rootTypes || {});
+			return roots.length ? roots : Object.keys(parsed.elementRegistry || {});
+		} catch {
+			return [];
+		}
+	}
+
+	// When a header layer is linked to a schema, default its root pattern to that
+	// schema's first root element (the user can still refine it by hand).
+	function onLayerSourceChange(layer) {
+		const roots = schemaRootsFor(layer.sourceFile);
+		if (roots.length) {
+			layer.rootPattern = roots[0];
+		}
+		updateRule();
+	}
+
+	function removeHeaderLayer(id) {
+		conversionRules.headerLayers = (conversionRules.headerLayers || []).filter((l) => l.id !== id);
+		saveRules(conversionRules);
+	}
+
+	function updateRule() {
+		// Persist on every edit so rules survive reloads.
+		saveRules(conversionRules);
+	}
+
+	function resetConversionRules() {
+		conversionRules = structuredClone(DEFAULT_CONVERSION_RULES);
+		saveRules(conversionRules);
 	}
 
 	// Follow xsd:include / xsd:import schemaLocation references by pulling in matching
@@ -166,9 +218,12 @@
 			lastModified: file.lastModified,
 			uploadedAt: new Date().toISOString()
 		};
-		// Only add if not already present; never overwrite an existing stored file
+		// Only add if not already present; never overwrite an existing stored file.
+		// Reassign (not .push) so the change is reactive in legacy mode — this is
+		// what makes the file list, Linked-schema dropdowns, and dependency
+		// progress refresh immediately after an upload.
 		if (!storedFiles.some(f => f.name === file.name)) {
-			storedFiles.push(fileInfo);
+			storedFiles = [...storedFiles, fileInfo];
 			saveStoredFiles();
 		}
 		return fileInfo;
@@ -251,7 +306,7 @@
 		error = '';
 	}
 
-	// Convenience: merge all stored schemas (e.g. ABCS header + DSP header + body)
+	// Convenience: merge all stored schemas (e.g. application header + transport header + body)
 	function quickMergeHeaderAndBody() {
 		if (!storedFiles.length) return;
 		mergeSelection = storedFiles.map(f => f.name);
@@ -405,16 +460,16 @@
 
 			const isAllSegments = rootElement.trim() === '__ALL__';
 
-			// 4. Map the header chain (DSP header → ABCS header → ABCS body), then parse
-			// the body. The DSP header starts at the first character; the ABCS header
+			// 4. Map the header chain (transport header → application header → ABCS body), then parse
+			// the body. The transport header starts at the first character; the application header
 			// follows it; the remainder is the ABCS body.
 			let headers = [];
 			let bodyBytes = startBytes;
 
 			// Parse one header root at an offset, reporting its declared length and
-			// signature. The DSP header length comes from I13HLEN (and its fields run
-			// from I13CNBF.SKTHEAD = '*SOKR' to I13RCNM). The ABCS header length comes
-			// from ICLEN and ends with ICEOM = '*EOM'.
+			// signature. The transport header length comes from the length field (and its fields run
+			// from the signature field = the expected value to the last field). The application header length comes
+			// from the length field and ends with the signature field = the expected value.
 			const parseOneHeader = (hroot, atOffset) => {
 				const tree = buildSchemaTree(schema, hroot);
 				const parsed = parseAbcsBinary(tree, startBytes.subarray(atOffset), {
@@ -423,38 +478,30 @@
 					defaultByteOrder: byteOrder,
 					stripPad: stripPad
 				});
-				const { dspLength, abcsLength } = extractHeaderLengths(parsed.json);
-				// Detect the header type from the PARSED CONTENT (root names may be
-				// generic, e.g. the ABCS header is literally named "Header"): a DSP
-				// header declares I13HLEN; an ABCS header declares ICLEN and ends with
-				// ICEOM. Fall back to name heuristics only if no length field is found.
-				const hasI13 = dspLength != null;
-				const hasIclen = abcsLength != null;
-				const hasIceom = findFieldValue(parsed.json, 'ICEOM') != null;
-				let isDspRoot, isAbcsRoot;
-				if (hasI13 && !hasIclen) { isDspRoot = true; isAbcsRoot = false; }
-				else if (hasIclen || hasIceom) { isDspRoot = false; isAbcsRoot = true; }
-				else {
-					isDspRoot = /dsp/i.test(hroot) || (!/abcs/i.test(hroot) && /header/i.test(hroot));
-					isAbcsRoot = /abcs/i.test(hroot) && !isDspRoot;
-				}
-				// Declared length: DSP header = I13HLEN; ABCS header = ICLEN.
-				const declaredLength = isAbcsRoot ? abcsLength : dspLength;
+				const layer =
+					(conversionRules.headerLayers || []).find(
+						(l) => l.rootPattern && matchesPattern(hroot, l.rootPattern)
+					) || null;
+				// The header layer was identified above by the user's root-name
+				// pattern. Its declared length comes from the layer's length field
+				// (user-defined) — no vendor field names are referenced here.
+				const declaredLength =
+					layer && layer.lengthField ? extractFieldValue(parsed.json, layer.lengthField) : null;
 				const remaining = startBytes.length - atOffset;
 				const declaredSane =
 					declaredLength != null && declaredLength > 0 && declaredLength <= remaining;
-				const rawField = (key) => {
-					const raw = findFieldValue(parsed.json, key);
-					return (raw && typeof raw === 'object') ? (raw.value ?? raw.text) : raw;
-				};
-				// Signatures: the DSP header starts with I13CNBF.SKTHEAD = '*SOKR'
-				// (len 5); the ABCS header ends with ICEOM = '*EOM'.
-				const skthead = isDspRoot ? rawField('SKTHEAD') : undefined;
-				const iceom = isAbcsRoot ? rawField('ICEOM') : undefined;
-				const i13rcnm = isDspRoot ? rawField('I13RCNM') : undefined;
-				const signatureOk = isDspRoot
-					? (skthead == null || skthead === '*SOKR')
-					: (isAbcsRoot ? (iceom == null || iceom === '*EOM') : true);
+				// Optional signature: a field whose value must equal the user's
+				// expected value (both defined in the conversion rules).
+				let signatureRaw;
+				if (layer && layer.signatureField) {
+					const raw = findFieldValue(parsed.json, layer.signatureField);
+					signatureRaw = raw && typeof raw === 'object' ? (raw.value ?? raw.text) : raw;
+				}
+				const signatureOk =
+					layer && layer.signatureField
+						? signatureRaw == null ||
+							String(signatureRaw) === String(layer.signatureValue)
+						: true;
 				return {
 					root: hroot,
 					json: parsed.json,
@@ -463,96 +510,88 @@
 					declaredLength,
 					declaredSane,
 					consumedBytes: parsed.debug.consumedBytes,
-					isDspRoot,
-					isAbcsRoot,
-					skthead,
-					iceom,
-					i13rcnm,
+					layer,
+					signatureRaw,
 					signatureOk,
 					length: 0
 				};
 			};
 
-			// Map the header chain: DSP header first, then the ABCS header (ends with
-			// ICEOM = '*EOM'), then the ABCS body is the remainder. The DSP header
+			// Map the header chain: transport header first, then the application header (ends with
+			// the signature field = the expected value), then the ABCS body is the remainder. The transport header
 			// starts at the first character. The true length of each header is the
-			// number of bytes the schema consumed (its fields end at the last field,
-			// e.g. I13RCNM for the DSP header and *EOM for the ABCS header). The
-			// I13HLEN / ICLEN length fields are a sanity signal, only authoritative
-			// when they agree with the schema layout. The ABCS header is optional
-			// (gated by the mapABCSHeader checkbox).
+			// number of bytes the schema consumed. The declared length (read from
+			// the layer's length field) is a sanity signal, only authoritative when
+			// it agrees with the schema layout. Additional header layers are
+			// optional (gated by the mapSecondaryHeader checkbox).
 			const runChain = (headerRoots) => {
 				const mapped = [];
 				let cursor = 0;
-				let dspMapped = false;
 				for (const root of headerRoots) {
 					const remaining = startBytes.length - cursor;
 					if (remaining <= 0) break;
+					// The secondary (and later) header layers are optional.
+					if (mapped.length >= 1 && !mapSecondaryHeader) break;
 					const h = parseOneHeader(root, cursor);
-					const auto = h.isAbcsRoot ? true : (messageDirection === 'auto');
-					if (h.isAbcsRoot && !mapABCSHeader) break;
-					// Auto-detected headers are skipped when their declared length is not
-					// sane, or when their signature is wrong (DSP: I13CNBF.SKTHEAD !=
-					// '*SOKR'; ABCS: ICEOM != '*EOM'). If a DSP candidate fails and none
-					// has been mapped yet, try the next DSP candidate at the same offset;
-					// otherwise stop (the ABCS header offset would be unknown).
+					// The first layer follows the chosen direction; later layers are
+					// always auto-validated against their declared length/signature.
+					const auto = mapped.length > 0 ? true : (messageDirection === 'auto');
+					// Skip headers whose declared length is not sane or whose signature
+					// does not match. If nothing has been mapped yet, try the next
+					// candidate at the same offset; otherwise stop (the next layer's
+					// offset would be unknown).
 					if (auto && (!h.declaredSane || !h.signatureOk)) {
-						if (h.isAbcsRoot || dspMapped) break;
+						if (mapped.length > 0) break;
 						continue;
 					}
-					// Header length: the schema-parsed byte count is authoritative (its
-					// fields end at I13RCNM / *EOM). I13HLEN / ICLEN are only used when
-					// they agree with the schema layout (within a small tolerance).
+					// Header length: the schema-parsed byte count is authoritative.
+					// The declared length (from the layer's length field) is only used
+					// when it agrees with the schema layout (within a small tolerance).
 					const schemaLength = h.consumedBytes;
-					// The declared header length (I13HLEN / ICLEN) is authoritative for the
-					// header boundary when sane — it is the true end of the header even when
-					// the schema also declares optional trailing fields (which the parser may
-					// or may not have consumed). Fall back to the schema-parsed byte count.
+					// The declared header length is authoritative for the header
+					// boundary when sane — it is the true end of the header even when
+					// the schema also declares optional trailing fields (which the
+					// parser may or may not have consumed). Fall back to the
+					// schema-parsed byte count.
 					h.length = h.declaredSane
 						? h.declaredLength
 						: (schemaLength > 0 ? schemaLength : (h.declaredLength || 0));
 					mapped.push(h);
 					cursor += h.length;
-					if (h.isDspRoot) dspMapped = true;
 				}
 				return { headers: mapped, bodyBytes: startBytes.subarray(cursor), cursor };
 			};
 
 			if (messageDirection !== 'auto') {
-				const headerRoots = findHeaderRootsForSchema(schema, messageDirection);
+				const headerRoots = findHeaderRootsForSchema(schema, messageDirection, conversionRules);
 				if (!headerRoots.length) {
 					// Don't hard-fail: parse the whole input as the body, with a soft warning.
 					parseWarning = `No header root was found for the "${messageDirection}" direction. ` +
-						`Expected a DSP header and/or ABCS header root (e.g. DSPHeader/DSPHeaderResponse, ` +
-						`ABCSHeader/ABCSHeaderResponse) in the schema. The whole input was parsed as the body.`;
+						`Define your header layers (root-name patterns) under Conversion Rules so the ` +
+						`converter knows which roots are headers. The whole input was parsed as the body.`;
 				} else {
 					const r = runChain(headerRoots);
 					headers = r.headers;
 					bodyBytes = r.bodyBytes;
 					const bad = headers.find(h => !h.signatureOk);
-					if (bad) {
-						if (bad.isDspRoot) {
-							parseWarning = `Mapped DSP header "${bad.root}" but its I13CNBF.SKTHEAD is ` +
-								`"${bad.skthead}" (expected "*SOKR", len 5). Double-check the message direction ` +
-								`(Request vs Response) and that the data begins with the DSP header.`;
-						} else if (bad.isAbcsRoot) {
-							parseWarning = `Mapped ABCS header "${bad.root}" but its ICEOM is ` +
-								`"${bad.iceom}" (expected "*EOM"). Double-check the ABCS header schema and that ` +
-								`the data after the DSP header is an ABCS header.`;
-						}
+					if (bad && bad.layer) {
+						parseWarning = `Mapped header "${bad.root}" (${bad.layer.label}) but its ` +
+							`${bad.layer.signatureField} is "${bad.signatureRaw}" (expected ` +
+							`"${bad.layer.signatureValue}"). Double-check the message direction ` +
+							`(Request vs Response) and your Conversion Rules.`;
 					}
 				}
 			} else {
-				// Auto: the DSP header always starts at the first character with
-				// I13CNBF.SKTHEAD = '*SOKR', so we prefer the direction whose DSP header
-				// carries that signature. Try response first (the common case), then request.
+				// Auto: prefer the direction whose first header layer carries a valid
+				// signature (defined in your Conversion Rules). Try response first
+				// (the common case), then request.
 				let best = null;
 				for (const dir of ['response', 'request']) {
-					const headerRoots = findHeaderRootsForSchema(schema, dir);
+					const headerRoots = findHeaderRootsForSchema(schema, dir, conversionRules);
 					if (!headerRoots.length) continue;
 					const r = runChain(headerRoots);
-					const dsp = r.headers.find(h => h.isDspRoot);
-					if (dsp && dsp.signatureOk) {
+					const first = r.headers.find(h => h.layer);
+					if (first && first.signatureOk) {
 						best = { ...r, autoDirection: dir };
 						break;
 					}
@@ -669,7 +708,7 @@
 			filename = 'abcs-segments.json';
 		} else {
 			// Flatten the mapped header chain + body into a single object:
-			// { DSPHeaderResponse: {...}, Header: {...}, Body: {...} }.
+			// { transport header (response): {...}, Header: {...}, Body: {...} }.
 			const flat = results.mode === 'header+single'
 				? {
 						...Object.fromEntries(results.headers.map(h => {
@@ -778,7 +817,7 @@
 		availableRoots = [];
 		schemaNotice = '';
 		messageDirection = 'auto';
-		mapABCSHeader = true;
+		mapSecondaryHeader = true;
 		mergeSelection = [];
 		binaryFile = null;
 		binaryFileName = '';
@@ -859,68 +898,185 @@
 				</div>
 			</div>
 			<div class="p-6 space-y-6">
-				<!-- Required Support Schemas (uploaded by user, stored in localStorage) -->
-				<div class="rounded-xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50 to-purple-50 p-4">
-					<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-						<div class="flex items-center space-x-2">
-							<Icon icon="mdi-light:shield-check" class="h-5 w-5 text-indigo-600" />
-							<span class="text-sm font-semibold text-gray-800">Required Support Schemas</span>
-							<span
-								class="text-xs font-semibold px-2 py-0.5 rounded-full {storedRequiredCount === requiredSchemaStatus.length
-									? 'bg-green-100 text-green-700'
-									: 'bg-amber-100 text-amber-700'}"
-							>
-								{storedRequiredCount}/{requiredSchemaStatus.length} loaded
-							</span>
+				<!-- Support Schemas (uploaded by user, stored in localStorage) -->
+					<div class="rounded-xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50 to-purple-50 p-4">
+						<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+							<div class="flex items-center space-x-2">
+								<Icon icon="mdi-light:shield-check" class="h-5 w-5 text-indigo-600" />
+								<span class="text-sm font-semibold text-gray-800">Support Schemas</span>
+								<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+									{storedFiles.length} stored
+								</span>
+							</div>
+							<p class="text-xs text-gray-500">
+								Schemas are not shipped with this app. Upload the DFDL schemas your message uses — they are
+								stored only in your browser (localStorage) and resolved automatically on convert.
+							</p>
 						</div>
-						<p class="text-xs text-gray-500">
-							Bank-specific schemas are not shipped with this app. Upload them once — they are stored only in
-							your browser (localStorage) and reused automatically.
-						</p>
+
+						<input
+							type="file"
+							id="abcs-support-schemas"
+							accept=".xsd,.xml"
+							multiple
+							onchange={handleSupportUpload}
+							class="w-full px-4 py-2.5 border-2 border-indigo-200 rounded-xl bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all text-sm file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+						/>
+
+						<!-- Dependency resolution progress (transitive) -->
+					{#if dependencyInfo.resolved.length || dependencyInfo.missing.length}
+						<div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+							<span class="font-semibold text-gray-700">Dependencies:</span>
+							<span class="px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-mono">
+								{dependencyInfo.resolved.length} resolved
+							</span>
+							{#if dependencyInfo.missing.length}
+								<span class="px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-mono">
+									{dependencyInfo.missing.length} missing
+								</span>
+							{:else}
+								<span class="px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold">
+									✓ all dependencies clear
+								</span>
+							{/if}
+						</div>
+					{/if}
+
+					{#if storedFiles.length}
+							<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+								{#each storedFiles as sf (sf.name)}
+									<div class="flex items-center justify-between gap-2 p-2.5 rounded-lg border bg-white border-gray-200">
+										<div class="flex items-center space-x-1.5 min-w-0">
+											<Icon icon="mdi-light:check-circle" class="h-4 w-4 shrink-0 text-green-600" />
+											<span class="font-mono text-xs font-semibold text-gray-800 truncate">{sf.name}</span>
+										</div>
+										<button
+											type="button"
+											onclick={() => deleteStoredSchema(sf.name)}
+											class="shrink-0 text-xs text-red-500 hover:text-red-700 font-medium"
+											title="Remove {sf.name} from local storage"
+										>
+											Remove
+										</button>
+									</div>
+								{/each}
+							</div>
+						{/if}
 					</div>
 
-					<input
-						type="file"
-						id="abcs-required-schemas"
-						accept=".xsd,.xml"
-						multiple
-						onchange={handleRequiredUpload}
-						class="w-full px-4 py-2.5 border-2 border-indigo-200 rounded-xl bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all text-sm file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-					/>
+					<!-- Conversion Rules (user-defined, persisted in localStorage) -->
+					<div class="rounded-xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 p-4">
+						<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+							<div class="flex items-center space-x-2">
+								<Icon icon="mdi-light:tune" class="h-5 w-5 text-purple-600" />
+								<span class="text-sm font-semibold text-gray-800">Conversion Rules</span>
+							</div>
+							<div class="flex items-center gap-2">
+								<button
+									type="button"
+									onclick={addHeaderLayer}
+									class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+								>
+									+ Add Header Layer
+								</button>
+								<button
+									type="button"
+									onclick={resetConversionRules}
+									class="text-xs font-medium px-3 py-1.5 rounded-lg border border-purple-200 bg-white text-purple-700 hover:bg-purple-50 transition-colors"
+								>
+									Reset
+								</button>
+							</div>
+						</div>
+						<p class="text-xs text-gray-500 mb-3">
+							Describe how to recognise each header layer so the converter knows how to proceed. All values are
+							stored only in your browser (localStorage) — never in the published code. Leave a pattern blank to
+							skip that layer.
+						</p>
 
-					<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
-						{#each requiredSchemaStatus as req}
-							<div
-								class="flex items-center justify-between gap-2 p-2.5 rounded-lg border {req.stored
-									? 'bg-green-50 border-green-200'
-									: 'bg-white border-gray-200'}"
-							>
-								<div class="min-w-0">
-									<div class="flex items-center space-x-1.5">
-										<Icon
-											icon={req.stored ? 'mdi-light:check-circle' : 'mdi-light:alert-circle'}
-											class="h-4 w-4 shrink-0 {req.stored ? 'text-green-600' : 'text-amber-500'}"
-										/>
-										<span class="font-mono text-xs font-semibold text-gray-800 truncate">{req.file}</span>
-									</div>
-									<p class="text-xs text-gray-500 truncate pl-5">{req.label} — {req.desc}</p>
-								</div>
-								{#if req.stored}
+						{#each conversionRules.headerLayers as layer}
+							<div class="rounded-lg border border-purple-200 bg-white p-3 mb-3">
+								<div class="flex items-center justify-between gap-2 mb-2">
+									<input
+										type="text"
+										bind:value={layer.label}
+										oninput={updateRule}
+										placeholder="Layer name"
+										class="font-semibold text-sm text-gray-800 bg-transparent border-b border-purple-200 focus:border-purple-500 focus:outline-none px-1 py-0.5 w-48"
+									/>
 									<button
 										type="button"
-										onclick={() => deleteRequiredSchema(req.storedName)}
-										class="shrink-0 text-xs text-red-500 hover:text-red-700 font-medium"
-										title="Remove {req.storedName} from local storage"
+										onclick={() => removeHeaderLayer(layer.id)}
+										class="text-xs text-red-500 hover:text-red-700 font-medium"
+										title="Remove this header layer"
 									>
 										Remove
 									</button>
-								{/if}
+								</div>
+						<label class="block mb-2">
+							<span class="block text-xs text-gray-500 mb-1">Linked schema (optional — pick the uploaded schema for this layer)</span>
+							<select
+								bind:value={layer.sourceFile}
+								onchange={() => onLayerSourceChange(layer)}
+								class="w-full font-mono text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-800 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none"
+							>
+								<option value="">— Not linked (define the root pattern manually) —</option>
+								{#each storedFiles as sf (sf.name)}
+									<option value={sf.name}>{sf.name}</option>
+								{/each}
+							</select>
+						</label>
+								<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+									<label class="block">
+										<span class="block text-xs text-gray-500 mb-1">Root name starts with</span>
+										<input
+											type="text"
+											bind:value={layer.rootPattern}
+											oninput={updateRule}
+											placeholder="e.g. ABCDEF"
+											class="w-full font-mono text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none"
+										/>
+									</label>
+									<label class="block">
+										<span class="block text-xs text-gray-500 mb-1">Length field name</span>
+										<input
+											type="text"
+											bind:value={layer.lengthField}
+											oninput={updateRule}
+											placeholder="Field that holds this layer's byte length"
+											class="w-full font-mono text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none"
+										/>
+									</label>
+									<label class="block">
+										<span class="block text-xs text-gray-500 mb-1">Signature field (optional)</span>
+										<input
+											type="text"
+											bind:value={layer.signatureField}
+											oninput={updateRule}
+											placeholder="Field that marks this layer"
+											class="w-full font-mono text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none"
+										/>
+									</label>
+									<label class="block">
+										<span class="block text-xs text-gray-500 mb-1">Expected signature value (optional)</span>
+										<input
+											type="text"
+											bind:value={layer.signatureValue}
+											oninput={updateRule}
+											placeholder="Expected value of the signature field"
+											class="w-full font-mono text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none"
+										/>
+									</label>
+								</div>
 							</div>
 						{/each}
-					</div>
-				</div>
 
-				<!-- DFDL Schema File Upload -->
+						{#if !conversionRules.headerLayers.length}
+							<p class="text-xs text-gray-500 italic">No header layers defined. Add one to tell the converter how to map headers.</p>
+						{/if}
+					</div>
+
+					<!-- DFDL Schema File Upload -->
 				<div>
 					<label for="abcs-schema" class="block text-sm font-medium text-gray-700 mb-2">
 						DFDL Schema File (.xml/.xsd)
@@ -991,7 +1147,7 @@
 										</button>
 									</div>
 									<p class="mt-2 text-xs text-gray-500">
-										Tick the header schema (e.g. <code class="font-mono bg-gray-100 px-1 rounded">DSPHeader.xsd</code>) and the body schema
+										Tick the header schema (e.g. <code class="font-mono bg-gray-100 px-1 rounded">transport header.xsd</code>) and the body schema
 										(e.g. <code class="font-mono bg-gray-100 px-1 rounded">abcs.xml</code>), then Merge — both root sets become available in the dropdown.
 									</p>
 								</div>
@@ -1056,23 +1212,20 @@
 					<label for="root-element" class="block text-sm font-medium text-gray-700 mb-2">
 						Root Element
 					</label>
-					<select
+					<SearchSelect
 						id="root-element"
 						bind:value={rootElement}
+						options={rootOptions}
 						disabled={availableRoots.length === 0}
-						class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all font-mono disabled:bg-gray-100 disabled:cursor-not-allowed"
-					>
-						<option value="">-- Select root element --</option>
-						<option value="__ALL__">All segments (auto-detect)</option>
-						{#each availableRoots as root}
-							<option value={root}>{root}</option>
-						{/each}
-					</select>
+						placeholder="-- Select root element --"
+						searchPlaceholder="Search root elements…"
+						emptyMessage="No matching root element"
+					/>
 					<p class="mt-2 text-xs text-gray-500">
 						{#if availableRoots.length > 0}
-							Auto-detected from the uploaded schema. Header roots (DSPHeader / ABCSHeader) are
+							Auto-detected from the uploaded schema. Header roots (transport header / application header) are
 							auto-mapped from the message front. Select the body root, e.g.
-							<code class="font-mono bg-gray-100 px-1 rounded">ABCSErrorRes</code>.
+							<code class="font-mono bg-gray-100 px-1 rounded">error body</code>.
 						{:else}
 							Upload a schema file to populate the root elements.
 						{/if}
@@ -1115,12 +1268,12 @@
 					</div>
 					<p class="mt-2 text-xs text-gray-500">
 						{#if messageDirection === 'auto'}
-							Auto-detects request vs response by trying <code class="font-mono bg-gray-100 px-1 rounded">DSPHeader</code> (request) then
-							<code class="font-mono bg-gray-100 px-1 rounded">DSPHeaderResponse</code> (response). The DSP header always starts at the first
-							character and is accepted when its <code class="font-mono bg-gray-100 px-1 rounded">I13CNBF.SKTHEAD</code> is <code class="font-mono bg-gray-100 px-1 rounded">*SOKR</code> (len 5);
-							<code class="font-mono bg-gray-100 px-1 rounded">I13HLEN</code> is used to find the body start.
+							Auto-detects request vs response by trying <code class="font-mono bg-gray-100 px-1 rounded">transport header</code> (request) then
+							<code class="font-mono bg-gray-100 px-1 rounded">transport header (response)</code> (response). The transport header always starts at the first
+							character and is accepted when its <code class="font-mono bg-gray-100 px-1 rounded">the signature field</code> is <code class="font-mono bg-gray-100 px-1 rounded">the expected value</code> (len 5);
+							<code class="font-mono bg-gray-100 px-1 rounded">the length field</code> is used to find the body start.
 						{:else}
-							Maps the <code class="font-mono bg-gray-100 px-1 rounded">{messageDirection === 'request' ? 'DSPHeader' : 'DSPHeaderResponse'}</code> header
+							Maps the <code class="font-mono bg-gray-100 px-1 rounded">{messageDirection === 'request' ? 'transport header' : 'transport header (response)'}</code> header
 							first (it always starts at the first character), then parses the remaining bytes as the body. Requires both the header schema and the body schema to be loaded (see "Merge schemas" below).
 						{/if}
 					</p>
@@ -1128,17 +1281,17 @@
 						<input
 							type="checkbox"
 							id="map-abcs-header"
-							bind:checked={mapABCSHeader}
+							bind:checked={mapSecondaryHeader}
 							class="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
 						/>
 						<label for="map-abcs-header" class="ml-3 block text-sm text-gray-700 font-medium">
-							Also map the ABCS-layer header (<code class="font-mono bg-gray-100 px-1 rounded">ABCSHeader</code>/<code class="font-mono bg-gray-100 px-1 rounded">ABCSHeaderResponse</code>, <code class="font-mono bg-gray-100 px-1 rounded">ICLEN</code>) after the DSP header
+							Also map the application header layer (<code class="font-mono bg-gray-100 px-1 rounded">application header</code>/<code class="font-mono bg-gray-100 px-1 rounded">application header (response)</code>, <code class="font-mono bg-gray-100 px-1 rounded">the length field</code>) after the transport header
 						</label>
 					</div>
 					<p class="mt-2 text-xs text-gray-500">
-						The ABCS-layer header is auto-detected: it is only mapped when its <code class="font-mono bg-gray-100 px-1 rounded">ICLEN</code>
-						is a sane length, so messages without it (e.g. starting directly with the DSP header) still parse correctly.
-						The message order is <code class="font-mono bg-gray-100 px-1 rounded">DSPHeader</code> → <code class="font-mono bg-gray-100 px-1 rounded">ABCSHeader</code> → <code class="font-mono bg-gray-100 px-1 rounded">ABCSBody</code>.
+						The application header layer is auto-detected: it is only mapped when its <code class="font-mono bg-gray-100 px-1 rounded">the length field</code>
+						is a sane length, so messages without it (e.g. starting directly with the transport header) still parse correctly.
+						The message order is <code class="font-mono bg-gray-100 px-1 rounded">transport header</code> → <code class="font-mono bg-gray-100 px-1 rounded">application header</code> → <code class="font-mono bg-gray-100 px-1 rounded">ABCSBody</code>.
 					</p>
 				</div>
 			</div>
@@ -1460,9 +1613,9 @@
 						</table>
 					</div>
 					<p class="text-xs text-orange-700 mt-1">
-						For this schema (<code class="font-mono bg-orange-100 px-1 rounded">ABCSError.xsd</code>), upload and store:
-						<strong>ABCSHeader.xsd</strong>, <strong>DataTypes.xsd</strong>, and a DSP header schema
-						(<strong>DSPHeader.xsd</strong> / <strong>DSPHeaderResponse.xsd</strong>), then click
+						For this schema (<code class="font-mono bg-orange-100 px-1 rounded">the error schema</code>), upload and store:
+						<strong>the application header schema</strong>, <strong>the data-types schema</strong>, and a transport header schema
+						(<strong>transport header.xsd</strong> / <strong>transport header (response).xsd</strong>), then click
 						<em>Auto (header + body)</em> to merge them all before converting.
 					</p>
 				</div>
@@ -1560,21 +1713,17 @@
 												<div class="font-semibold text-gray-800">
 													Mapped Header {hi + 1}: <span class="font-mono text-indigo-700">{h.root}</span>
 													<span class="ml-2 inline-block text-[11px] font-mono px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 uppercase">
-														{h.root.toLowerCase().includes('abcs') ? 'ABCS' : (messageDirection === 'auto' ? (h.declaredSane ? 'auto' : '') : messageDirection)}
+														{h.layer?.label ? h.layer.label : (messageDirection === 'auto' ? (h.declaredSane ? 'auto' : '') : messageDirection)}
 													</span>
 												</div>
 												<div class="text-xs text-gray-500 font-mono">
 													{h.length} bytes (declared {h.declaredLength ?? '—'}) · {h.consumedBytes} consumed · {h.debug.detectedEncoding}
-													{#if h.isDspRoot}
-														<span class="ml-2 {h.signatureOk ? 'text-green-600' : 'text-red-500 font-semibold'}">
-															SKTHEAD = {JSON.stringify(h.skthead)}{h.signatureOk ? ' ✓' : ' ✗ (expected *SOKR)'}
-														</span>
-														{#if h.i13rcnm != null}<span class="ml-2 text-gray-400">→ I13RCNM = {JSON.stringify(h.i13rcnm)}</span>{/if}
-													{:else if h.isAbcsRoot}
-														<span class="ml-2 {h.signatureOk ? 'text-green-600' : 'text-red-500 font-semibold'}">
-															ICEOM = {JSON.stringify(h.iceom)}{h.signatureOk ? ' ✓' : ' ✗ (expected *EOM)'}
-														</span>
-													{/if}
+													{#if h.layer && h.layer.signatureField}
+<span class="ml-2 {h.signatureOk ? 'text-green-600' : 'text-red-500 font-semibold'}">
+{h.layer.signatureField} = {JSON.stringify(h.signatureRaw)}{h.signatureOk ? ' ✓' : ' ✗ (expected ' + h.layer.signatureValue + ')'}
+</span>
+{/if}
+													
 												</div>
 											</div>
 										</div>

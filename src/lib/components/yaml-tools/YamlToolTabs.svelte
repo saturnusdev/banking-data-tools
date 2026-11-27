@@ -98,6 +98,7 @@
 	);
 
 	let activeLabel = $derived(YAML_TOOLS.find((t) => t.id === activeTab)?.label ?? '');
+	let activeIcon = $derived(YAML_TOOLS.find((t) => t.id === activeTab)?.icon ?? 'mdi:swap-horizontal');
 
 	function setResult(text: string, metaText = '') {
 		output = text;
@@ -350,7 +351,7 @@
 </script>
 
 <!-- Tab Navigation (matches ISO 8583 Studio layout) -->
-<nav class="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-green-100 shadow-sm">
+<nav class="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-emerald-100 shadow-sm">
 	<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 		<div class="flex gap-1 overflow-x-auto py-2">
 			{#each YAML_TOOLS as tool}
@@ -360,8 +361,8 @@
 					aria-label={tool.label}
 					onclick={() => selectTab(tool.id)}
 					class="flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all {activeTab === tool.id
-						? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md'
-						: 'text-gray-600 hover:bg-green-50'}"
+						? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md'
+						: 'text-gray-600 hover:bg-emerald-50'}"
 				>
 					<SafeIcon iconName={tool.icon} customClass="h-4 w-4" />
 					{tool.label}
@@ -372,46 +373,52 @@
 </nav>
 
 <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-	<div class="overflow-hidden rounded-2xl border border-green-100 bg-white shadow-xl">
+	<div class="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-xl">
 
-	<!-- Action Toolbar -->
-	<div class="flex items-center justify-end gap-1 border-b border-gray-100 bg-gray-50 px-4 py-2">
-		<button
-			type="button"
-			title="Run {activeLabel} (Ctrl+Enter)"
-			onclick={runActive}
-			class="flex cursor-pointer items-center gap-1.5 rounded bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-600"
-		>
-			<SafeIcon iconName="mdi:play" customClass="h-4 w-4" />
-			<span>{activeLabel}</span>
-		</button>
-		<button
-			type="button"
-			title="Copy output"
-			aria-label="Copy output"
-			onclick={copyOutput}
-			class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800"
-		>
-			<SafeIcon iconName="mdi:content-copy" customClass="h-5 w-5" />
-		</button>
-		<button
-			type="button"
-			title="Download output"
-			aria-label="Download output"
-			onclick={downloadOutput}
-			class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800"
-		>
-			<SafeIcon iconName="mdi:download" customClass="h-5 w-5" />
-		</button>
-		<button
-			type="button"
-			title="Clear output"
-			aria-label="Clear output"
-			onclick={clearOutput}
-			class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800"
-		>
-			<SafeIcon iconName="mdi:delete" customClass="h-5 w-5" />
-		</button>
+	<!-- Gradient Header Card -->
+	<div class="overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 p-5 flex flex-wrap items-center justify-between gap-3">
+		<div class="flex items-center gap-3">
+			<SafeIcon iconName={activeIcon} customClass="h-6 w-6 text-white" />
+			<h2 class="text-xl font-bold text-white">{activeLabel}</h2>
+		</div>
+		<div class="flex items-center gap-2">
+			<button
+				type="button"
+				title="Run {activeLabel} (Ctrl+Enter)"
+				onclick={runActive}
+				class="flex items-center gap-1.5 rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/30"
+			>
+				<SafeIcon iconName="mdi:play" customClass="h-4 w-4" />
+				<span>{activeLabel}</span>
+			</button>
+			<button
+				type="button"
+				title="Copy output"
+				aria-label="Copy output"
+				onclick={copyOutput}
+				class="rounded-lg bg-white/20 p-2 text-white transition-colors hover:bg-white/30"
+			>
+				<SafeIcon iconName="mdi:content-copy" customClass="h-5 w-5" />
+			</button>
+			<button
+				type="button"
+				title="Download output"
+				aria-label="Download output"
+				onclick={downloadOutput}
+				class="rounded-lg bg-white/20 p-2 text-white transition-colors hover:bg-white/30"
+			>
+				<SafeIcon iconName="mdi:download" customClass="h-5 w-5" />
+			</button>
+			<button
+				type="button"
+				title="Clear output"
+				aria-label="Clear output"
+				onclick={clearOutput}
+				class="rounded-lg bg-white/20 p-2 text-white transition-colors hover:bg-white/30"
+			>
+				<SafeIcon iconName="mdi:delete" customClass="h-5 w-5" />
+			</button>
+		</div>
 	</div>
 
 	<div class="grid grid-cols-1 gap-4 p-4 lg:grid-cols-2">

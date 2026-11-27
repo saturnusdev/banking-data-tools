@@ -1,3 +1,33 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap');
 @import 'tailwindcss';
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
+
+/* Design tokens (DESIGN.md) exposed as Tailwind v4 theme variables so they
+   generate utilities like font-display, text-ink, bg-canvas, etc. */
+@theme {
+	--font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+	--font-display: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+	--color-canvas: #f8fafc;
+	--color-ink: #0f172a;
+	--color-ink-soft: #475569;
+	--color-line: #e2e8f0;
+}
+
+html {
+	scroll-behavior: smooth;
+}
+
+body {
+	font-family: var(--font-sans);
+	background-color: var(--color-canvas);
+	color: var(--color-ink);
+	-webkit-font-smoothing: antialiased;
+}
+
+/* Subtle dotted grid used behind the hero for depth. */
+.dot-grid {
+	background-image: radial-gradient(circle at 1px 1px, rgba(15, 23, 42, 0.06) 1px, transparent 0);
+	background-size: 22px 22px;
+}

@@ -64,13 +64,13 @@
 	</script>
 </svelte:head>
 
-<main class="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
-	<header class="border-b border-green-100 bg-white shadow-lg">
-		<div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+<main class="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
+	<header class="bg-white shadow-lg border-b border-emerald-100">
+		<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
 			<div class="flex items-center justify-between">
 				<div class="flex items-center space-x-4">
 					<button
-						class="group rounded-full p-2 text-green-600 transition-all hover:scale-110 hover:bg-green-100"
+						class="group rounded-full p-2 text-emerald-600 transition-all hover:scale-110 hover:bg-emerald-100"
 						onclick={() => (location.href = '/')}
 					>
 						<SafeIcon
@@ -79,12 +79,12 @@
 						/>
 					</button>
 					<div class="flex items-center space-x-3">
-						<div class="rounded-full bg-gradient-to-r from-green-500 to-emerald-500 p-3">
+						<div class="rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 p-3">
 							<SafeIcon iconName="mdi-light:file-code" customClass="h-8 w-8 text-white" />
 						</div>
 						<div>
 							<h1
-								class="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-3xl font-bold text-transparent"
+								class="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-3xl font-bold text-transparent"
 							>
 								YAML Tools
 							</h1>
