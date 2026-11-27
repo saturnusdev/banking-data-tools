@@ -18,7 +18,7 @@
 		base64ToBytes,
 		collectMissingTypes,
 		resolveAllIncludes,
-		BUILTIN_SCHEMAS
+		expandAliases
 	} from '#lib/plugin/abcs/abcsParser.js';
 
 	// Form state
@@ -62,11 +62,12 @@
 				allRefs.add(m[1].split('/').pop().toLowerCase());
 			}
 		}
-		// Resolved = present in built-in registry OR stored by user
-		const resolved = new Set([
-			...Object.keys(BUILTIN_SCHEMAS),
-			...storedFiles.map(f => f.name.toLowerCase())
-		]);
+		// Resolved = any stored file, expanded to all its known aliases.
+		const resolved = new Set();
+		for (const f of storedFiles) {
+			for (const alias of expandAliases(f.name)) resolved.add(alias.toLowerCase());
+			resolved.add(f.name.toLowerCase());
+		}
 		return [...allRefs].filter(ref => !resolved.has(ref));
 	})();
 
@@ -98,10 +99,57 @@
 		localStorage.setItem('abcs-files', JSON.stringify(storedFiles));
 	}
 
+	// ------------------------------------------------------------------
+	// Required support schemas (NOT shipped with the app for security).
+	// These are the bank-specific DFDL schemas the converter needs to
+	// resolve xsd:include/xsd:import references. Upload them once; they
+	// are persisted in localStorage and resolved automatically on convert.
+	// ------------------------------------------------------------------
+	const REQUIRED_SCHEMAS = [
+		{ file: 'generalPurposeFormat.xsd', label: 'General Purpose Format', desc: 'DFDL general-purpose format properties' },
+		{ file: 'recordFixLengthFieldFormat.xsd', label: 'Record Fix-Length Field Format', desc: 'DFDL fixed-length record field format' },
+		{ file: 'dataType.xsd', label: 'Data Types', desc: 'Data type definitions' },
+		{ file: 'header.xsd', label: 'ABCS Header', desc: 'ABCSHeader (ICLEN) segment' },
+		{ file: 'dspHeader.xsd', label: 'DSP Header', desc: 'DSPHeader / DSPHeaderResponse segment' },
+		{ file: 'error.xsd', label: 'ABCS Error', desc: 'ABCSErrorRes body' }
+	];
+
+	// Per-required-schema status: is it already in localStorage (under any alias)?
+	$: requiredSchemaStatus = REQUIRED_SCHEMAS.map(req => {
+		const aliases = expandAliases(req.file);
+		const match = storedFiles.find(f => aliases.includes(f.name.toLowerCase()));
+		return { ...req, stored: !!match, storedName: match ? match.name : '' };
+	});
+	$: storedRequiredCount = requiredSchemaStatus.filter(r => r.stored).length;
+
+	// Upload one or more of the required support schemas and persist them.
+	async function handleRequiredUpload(event) {
+		const files = Array.from(event.target.files || []);
+		event.target.value = ''; // allow re-selecting the same file later
+		if (!files.length) return;
+		let added = 0;
+		for (const file of files) {
+			await storeFile(file);
+			added++;
+		}
+		const missing = requiredSchemaStatus.filter(r => !r.stored).length;
+		schemaNotice = `Stored ${added} schema file(s). ${missing === 0 ? 'All required schemas are loaded.' : `${missing} required schema(s) still missing.`}`;
+		error = '';
+	}
+
+	// Remove a stored required schema from localStorage.
+	function deleteRequiredSchema(name) {
+		storedFiles = storedFiles.filter(f => f.name !== name);
+		saveStoredFiles();
+		if (selectedStoredFile === name) selectedStoredFile = '';
+		mergeSelection = mergeSelection.filter(n => n !== name);
+		schemaNotice = `Removed ${name} from local storage.`;
+	}
+
 	// Follow xsd:include / xsd:import schemaLocation references by pulling in matching
 	// files the user has already stored/uploaded (e.g. a Header/Body type defined in a
-	// separate XSD). Built-in schemas (shipped with the project) are always resolved
-	// automatically via resolveAllIncludes; stored files supplement or override them.
+	// separate XSD). All schemas come from localStorage — nothing is bundled — and are
+	// resolved automatically via resolveAllIncludes, expanded to their known aliases.
 	function resolveSchemaTexts(texts) {
 		const userSchemas = Object.fromEntries(
 			storedFiles.map(f => [f.name.toLowerCase(), f.content])
@@ -128,8 +176,8 @@
 
 	// Extract available root elements (top-level xs:element) from all active schemas.
 	// Roots come ONLY from the user-uploaded texts (schemaTexts / schemaText).
-	// Built-in schemas (resolved via resolveSchemaTexts) are used for type resolution
-	// only — they never contribute root elements to the dropdown.
+	// Stored support schemas (resolved via resolveSchemaTexts) are used for type
+	// resolution only — they never contribute root elements to the dropdown.
 	function updateAvailableRoots() {
 		try {
 			const uploadedTexts = schemaTexts.length ? schemaTexts : schemaText ? [schemaText] : [];
@@ -330,10 +378,11 @@
 			if (missingTypes.length) {
 				const names = [...new Set(missingTypes.map(m => m.typeName))].slice(0, 6).join(', ');
 				const fileRefs = [...new Set(schema.includes || [])];
-				// A file is resolved if it's in BUILTIN_SCHEMAS OR in user-uploaded storedFiles
+				// A file is resolved if a stored (uploaded) schema matches it or any of its aliases.
 				const missing = fileRefs.filter(f => {
 					const lc = f.toLowerCase();
-					return !BUILTIN_SCHEMAS[lc] && !storedFiles.some(s => s.name.toLowerCase() === lc);
+					const aliases = expandAliases(lc);
+					return !storedFiles.some(s => aliases.includes(s.name.toLowerCase()) || s.name.toLowerCase() === lc);
 				});
 				if (missing.length) {
 					parseWarning = `Missing included schema file(s): ${missing.join(', ')}. ` +
@@ -810,6 +859,67 @@
 				</div>
 			</div>
 			<div class="p-6 space-y-6">
+				<!-- Required Support Schemas (uploaded by user, stored in localStorage) -->
+				<div class="rounded-xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50 to-purple-50 p-4">
+					<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+						<div class="flex items-center space-x-2">
+							<Icon icon="mdi-light:shield-check" class="h-5 w-5 text-indigo-600" />
+							<span class="text-sm font-semibold text-gray-800">Required Support Schemas</span>
+							<span
+								class="text-xs font-semibold px-2 py-0.5 rounded-full {storedRequiredCount === requiredSchemaStatus.length
+									? 'bg-green-100 text-green-700'
+									: 'bg-amber-100 text-amber-700'}"
+							>
+								{storedRequiredCount}/{requiredSchemaStatus.length} loaded
+							</span>
+						</div>
+						<p class="text-xs text-gray-500">
+							Bank-specific schemas are not shipped with this app. Upload them once — they are stored only in
+							your browser (localStorage) and reused automatically.
+						</p>
+					</div>
+
+					<input
+						type="file"
+						id="abcs-required-schemas"
+						accept=".xsd,.xml"
+						multiple
+						onchange={handleRequiredUpload}
+						class="w-full px-4 py-2.5 border-2 border-indigo-200 rounded-xl bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all text-sm file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+					/>
+
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+						{#each requiredSchemaStatus as req}
+							<div
+								class="flex items-center justify-between gap-2 p-2.5 rounded-lg border {req.stored
+									? 'bg-green-50 border-green-200'
+									: 'bg-white border-gray-200'}"
+							>
+								<div class="min-w-0">
+									<div class="flex items-center space-x-1.5">
+										<Icon
+											icon={req.stored ? 'mdi-light:check-circle' : 'mdi-light:alert-circle'}
+											class="h-4 w-4 shrink-0 {req.stored ? 'text-green-600' : 'text-amber-500'}"
+										/>
+										<span class="font-mono text-xs font-semibold text-gray-800 truncate">{req.file}</span>
+									</div>
+									<p class="text-xs text-gray-500 truncate pl-5">{req.label} — {req.desc}</p>
+								</div>
+								{#if req.stored}
+									<button
+										type="button"
+										onclick={() => deleteRequiredSchema(req.storedName)}
+										class="shrink-0 text-xs text-red-500 hover:text-red-700 font-medium"
+										title="Remove {req.storedName} from local storage"
+									>
+										Remove
+									</button>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				</div>
+
 				<!-- DFDL Schema File Upload -->
 				<div>
 					<label for="abcs-schema" class="block text-sm font-medium text-gray-700 mb-2">

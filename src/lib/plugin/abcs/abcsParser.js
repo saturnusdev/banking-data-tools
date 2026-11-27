@@ -17,53 +17,63 @@
  */
 
 /* ------------------------------------------------------------------ */
-/* Built-in schema registry                                            */
+/* Schema alias registry (metadata only — no schema content)           */
 /*                                                                     */
-/* All XSD files shipped with the project are pre-loaded here so the   */
-/* parser never needs manual file uploads to resolve xsd:include /     */
-/* xsd:import references. User-uploaded schemas are merged on top and  */
-/* override these when names collide.                                  */
+/* Bank-specific DFDL schemas are NOT shipped with the project. The    */
+/* user uploads them once; they are persisted in localStorage and       */
+/* resolved automatically when converting. This map only records the   */
+/* filenames each schema may be referenced as (from xsd:include /       */
+/* xsd:import schemaLocation="...") so a schema uploaded under any of   */
+/* its known names still resolves. All lookups are case-insensitive.   */
 /* ------------------------------------------------------------------ */
 
-import recordFixLengthFieldFormatXsd from './recordFixLengthFieldFormat.xsd?raw';
-import dataTypeXsd from './dataType.xsd?raw';
-import headerXsd from './header.xsd?raw';
-import dspHeaderXsd from './dspHeader.xsd?raw';
-import errorXsd from './error.xsd?raw';
-import generalPurposeFormatXsd from './generalPurposeFormat.xsd?raw';
+export const SCHEMA_ALIASES = {
+	// General purpose format (IBM)
+	'generalpurposeformat.xsd': ['generalpurposeformat.xsd'],
+	// RecordFixLengthFieldFormat — referenced as "IBMdefined/RecordFixLengthFieldFormat.xsd"
+	'recordfixlengthfieldformat.xsd': ['recordfixlengthfieldformat.xsd'],
+	// DataTypes — file is dataType.xsd, referenced as DataTypes.xsd / dataType.xsd
+	'datatype.xsd': ['datatypes.xsd', 'datatype.xsd'],
+	// ABCS header — file is header.xsd, referenced as ABCSHeader.xsd / header.xsd
+	'header.xsd': ['abcsheader.xsd', 'header.xsd'],
+	// DSP header — file is dspHeader.xsd, referenced as DSPHeader.xsd / DSPHeaderResponse.xsd
+	'dspheader.xsd': ['dspheader.xsd', 'dspheaderresponse.xsd'],
+	// ABCS error body — file is error.xsd, referenced as ABCSError.xsd / error.xsd
+	'error.xsd': ['abcserror.xsd', 'error.xsd'],
+};
+
+// Reverse lookup: any alias -> canonical filename (lowercase).
+const ALIAS_TO_CANONICAL = (() => {
+	const map = {};
+	for (const [canonical, aliases] of Object.entries(SCHEMA_ALIASES)) {
+		for (const alias of aliases) map[alias.toLowerCase()] = canonical;
+	}
+	return map;
+})();
 
 /**
- * Built-in schema files keyed by every alias they may be referenced as
- * (from xsd:include schemaLocation="..."). All lookups are case-insensitive.
- * The aliases cover both the actual file names and the IBM source names used
- * in the schemaLocation attributes of the shipped XSD files.
+ * Expand a schema filename to every alias it may be referenced as.
+ * Unknown filenames resolve to themselves (so arbitrary user schemas
+ * and the primary message schema are still registered under their own
+ * name). All returned aliases are lowercase.
+ *
+ * @param {string} filename
+ * @returns {string[]}
  */
-export const BUILTIN_SCHEMAS = {
-	// RecordFixLengthFieldFormat — referenced as "IBMdefined/RecordFixLengthFieldFormat.xsd"
-	'recordfixlengthfieldformat.xsd': recordFixLengthFieldFormatXsd,
-	// DataTypes — file is dataType.xsd, referenced as DataTypes.xsd / dataType.xsd
-	'datatypes.xsd': dataTypeXsd,
-	'datatype.xsd': dataTypeXsd,
-	// ABCS header — file is header.xsd, referenced as ABCSHeader.xsd / header.xsd
-	'abcsheader.xsd': headerXsd,
-	'header.xsd': headerXsd,
-	// DSP header — file is dspHeader.xsd, referenced as DSPHeader.xsd / dspHeader.xsd
-	'dspheader.xsd': dspHeaderXsd,
-	'dspheaderresponse.xsd': dspHeaderXsd,
-	// ABCS error body — file is error.xsd, referenced as ABCSError.xsd / error.xsd
-	'abcserror.xsd': errorXsd,
-	'error.xsd': errorXsd,
-	// General purpose format (IBM)
-	'generalpurposeformat.xsd': generalPurposeFormatXsd,
-};
+export function expandAliases(filename) {
+	const lower = String(filename).toLowerCase();
+	const canonical = ALIAS_TO_CANONICAL[lower] || lower;
+	return SCHEMA_ALIASES[canonical] || [lower];
+}
 
 /**
  * Resolve all xsd:include/xsd:import schemaLocation references in a list of
- * schema texts, pulling in built-in schemas automatically and supplementing
- * with any user-supplied extras (keyed by filename, case-insensitive).
+ * schema texts by pulling in matching user-supplied schemas (keyed by
+ * filename, case-insensitive). Each supplied schema is registered under all
+ * of its known aliases so includes resolve regardless of the exact name used.
  *
  * @param {string[]} texts - initial schema texts
- * @param {Record<string,string>} [userSchemas] - extra schemas from localStorage
+ * @param {Record<string,string>} [userSchemas] - schemas from localStorage
  * @returns {string[]} full list of schema texts with all includes resolved
  */
 export function resolveAllIncludes(texts, userSchemas = {}) {
@@ -71,9 +81,12 @@ export function resolveAllIncludes(texts, userSchemas = {}) {
 	const seen = new Set(texts);
 	const queue = [...texts];
 
-	// Merge built-in + user schemas into one lookup (user overrides built-in)
-	const allAvailable = { ...BUILTIN_SCHEMAS };
+	// Register every user schema under its own name + all known aliases.
+	const allAvailable = {};
 	for (const [name, content] of Object.entries(userSchemas)) {
+		for (const alias of expandAliases(name)) {
+			allAvailable[alias.toLowerCase()] = content;
+		}
 		allAvailable[name.toLowerCase()] = content;
 	}
 

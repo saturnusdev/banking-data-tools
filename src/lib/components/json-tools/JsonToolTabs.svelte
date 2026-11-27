@@ -102,6 +102,7 @@
 	);
 
 	let activeLabel = $derived(tabs.find((t) => t.id === activeTab)?.label ?? '');
+	let activeIcon = $derived(tabs.find((t) => t.id === activeTab)?.icon ?? 'mdi:swap-horizontal');
 
 	function setResult(text: string, metaText = '') {
 		output = text;
@@ -375,79 +376,110 @@
 <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 	<div class="overflow-hidden rounded-2xl border border-green-100 bg-white shadow-xl">
 
-	<!-- Action Toolbar -->
-	<div class="flex items-center justify-end gap-1 border-b border-gray-100 bg-gray-50 px-4 py-2">
-		<button
-			type="button"
-			title="Run {activeLabel} (Ctrl+Enter)"
-			onclick={runActive}
-			class="flex cursor-pointer items-center gap-1.5 rounded bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-600"
-		>
-			<SafeIcon iconName="mdi:play" customClass="h-4 w-4" />
-			<span>{activeLabel}</span>
-		</button>
-		<button
-			type="button"
-			title="Copy output"
-			aria-label="Copy output"
-			onclick={copyOutput}
-			class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800"
-		>
-			<SafeIcon iconName="mdi:content-copy" customClass="h-5 w-5" />
-		</button>
-		<button
-			type="button"
-			title="Download output"
-			aria-label="Download output"
-			onclick={downloadOutput}
-			class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800"
-		>
-			<SafeIcon iconName="mdi:download" customClass="h-5 w-5" />
-		</button>
-		<button
-			type="button"
-			title="Clear output"
-			aria-label="Clear output"
-			onclick={clearOutput}
-			class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800"
-		>
-			<SafeIcon iconName="mdi:delete" customClass="h-5 w-5" />
-		</button>
-	</div>
+	<!-- Gradient Header Card -->
+	<div class="overflow-hidden bg-gradient-to-r from-green-500 to-emerald-500 p-5 flex flex-wrap items-center justify-between gap-3">
+		<div class="flex items-center gap-3">
+			<SafeIcon iconName={activeIcon} customClass="h-6 w-6 text-white" />
+			<h2 class="text-xl font-bold text-white">{activeLabel}</h2>
+		</div>
+		<div class="flex flex-wrap items-center gap-2">
+			{#if activeTab === 'convert'}
+			<div class="flex rounded-lg bg-white/20 p-0.5 backdrop-blur-sm">
+						<button
+							type="button"
+							onclick={() => (convertMode = 'json-to-x')}
+							class="rounded-md px-3 py-1 text-xs font-semibold transition-all {convertMode === 'json-to-x'
+								? 'bg-white text-green-700 shadow'
+								: 'text-white hover:bg-white/20'}"
+						>
+							JSON → Format
+						</button>
+						<button
+							type="button"
+							onclick={() => (convertMode = 'x-to-json')}
+							class="rounded-md px-3 py-1 text-xs font-semibold transition-all {convertMode === 'x-to-json'
+								? 'bg-white text-green-700 shadow'
+								: 'text-white hover:bg-white/20'}"
+						>
+							Format → JSON
+						</button>
+					</div>
+					<div class="flex gap-1.5">
+						<button
+							type="button"
+							onclick={() => (convertFormat = 'yaml')}
+							class="rounded-md px-3 py-1 text-xs font-semibold transition-all {convertFormat === 'yaml'
+								? 'bg-white text-green-700 shadow'
+								: 'bg-white/20 text-white backdrop-blur-sm hover:bg-white/30'}"
+						>
+							YAML
+						</button>
+						<button
+							type="button"
+							onclick={() => (convertFormat = 'csv')}
+							class="rounded-md px-3 py-1 text-xs font-semibold transition-all {convertFormat === 'csv'
+								? 'bg-white text-green-700 shadow'
+								: 'bg-white/20 text-white backdrop-blur-sm hover:bg-white/30'}"
+						>
+							CSV
+						</button>
+						<button
+							type="button"
+							onclick={() => (convertFormat = 'xml')}
+							class="rounded-md px-3 py-1 text-xs font-semibold transition-all {convertFormat === 'xml'
+								? 'bg-white text-green-700 shadow'
+								: 'bg-white/20 text-white backdrop-blur-sm hover:bg-white/30'}"
+						>
+							XML
+						</button>
+					</div>
+				{/if}
+				<div class="flex items-center gap-2">
+					<button
+						type="button"
+						title="Run {activeLabel} (Ctrl+Enter)"
+						onclick={runActive}
+						class="flex items-center gap-1.5 rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/30"
+					>
+						<SafeIcon iconName="mdi:play" customClass="h-4 w-4" />
+						<span>{activeLabel}</span>
+					</button>
+					<button
+						type="button"
+						title="Copy output"
+						aria-label="Copy output"
+						onclick={copyOutput}
+						class="rounded-lg bg-white/20 p-2 text-white transition-colors hover:bg-white/30"
+					>
+						<SafeIcon iconName="mdi:content-copy" customClass="h-5 w-5" />
+					</button>
+					<button
+						type="button"
+						title="Download output"
+						aria-label="Download output"
+						onclick={downloadOutput}
+						class="rounded-lg bg-white/20 p-2 text-white transition-colors hover:bg-white/30"
+					>
+						<SafeIcon iconName="mdi:download" customClass="h-5 w-5" />
+					</button>
+					<button
+						type="button"
+						title="Clear output"
+						aria-label="Clear output"
+						onclick={clearOutput}
+						class="rounded-lg bg-white/20 p-2 text-white transition-colors hover:bg-white/30"
+					>
+						<SafeIcon iconName="mdi:delete" customClass="h-5 w-5" />
+					</button>
+				</div>
+			</div>
+		</div>
 
 	<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
 		<div>
 			{#if activeTab === 'convert'}
-				<div class="mb-2 flex gap-2">
-					<label class="flex items-center gap-1 text-sm text-gray-600">
-						<input type="radio" bind:group={convertMode} value="json-to-x" /> JSON → Format
-					</label>
-					<label class="flex items-center gap-1 text-sm text-gray-600">
-						<input type="radio" bind:group={convertMode} value="x-to-json" /> Format → JSON
-					</label>
-				</div>
-				<div class="mb-2 flex gap-2">
-					<button
-						type="button"
-						onclick={() => (convertFormat = 'yaml')}
-						class="px-3 py-1 text-sm rounded border {convertFormat === 'yaml' ? 'bg-emerald-100 border-emerald-400 text-emerald-700' : 'border-gray-300 text-gray-600'}"
-					>
-						YAML
-					</button>
-					<button
-						type="button"
-						onclick={() => (convertFormat = 'csv')}
-						class="px-3 py-1 text-sm rounded border {convertFormat === 'csv' ? 'bg-emerald-100 border-emerald-400 text-emerald-700' : 'border-gray-300 text-gray-600'}"
-					>
-						CSV
-					</button>
-					<button
-						type="button"
-						onclick={() => (convertFormat = 'xml')}
-						class="px-3 py-1 text-sm rounded border {convertFormat === 'xml' ? 'bg-emerald-100 border-emerald-400 text-emerald-700' : 'border-gray-300 text-gray-600'}"
-					>
-						XML
-					</button>
+				<div class="mb-2">
+					<span class="text-sm font-medium text-gray-600">Input</span>
 				</div>
 				<MonacoField bind:value={convertInput} language={convertInLang} height="14rem" />
 {:else if activeTab === 'minify'}
